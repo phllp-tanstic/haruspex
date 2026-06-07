@@ -1,0 +1,23 @@
+{
+  "endpoint": "GET /api/v2/mix/market/current-fund-rate + GET /api/v2/mix/market/funding-time",
+  "requestTime": "2026-06-06T03:36:35.611Z",
+  "data": {
+    "currentFundRate": [
+      {
+        "symbol": "BTCUSDT",
+        "fundingRate": "-0.000004",
+        "fundingRateInterval": "8",
+        "nextUpdate": "1780732800000",
+        "minFundingRate": "-0.003",
+        "maxFundingRate": "0.003"
+      }
+    ],
+    "fundingTime": [
+      {
+        "symbol": "BTCUSDT",
+        "nextFundingTime": "1780732800000",
+        "ratePeriod": "8"
+      }
+    ]
+  }
+}
