@@ -394,14 +394,22 @@ async function loadLiveSignals() {
 }
 
 async function loadData() {
-  // Fetch trades
+  // Fetch trades — try local server first, fall back to static snapshot
   try {
-    const res = await fetch('http://localhost:3000/api/logs');
-    if (!res.ok) throw new Error('No log');
-    const trades = await res.json();
-    renderTrades(trades);
-    renderStats(trades);
-    renderActivity(trades);
+    let trades = [];
+    try {
+      const res = await fetch('http://localhost:3000/api/logs');
+      if (res.ok) trades = await res.json();
+    } catch {
+      // Local server not available — load static snapshot for public demo
+      const res = await fetch('./trades.json');
+      if (res.ok) trades = await res.json();
+    }
+    if (trades.length > 0) {
+      renderTrades(trades);
+      renderStats(trades);
+      renderActivity(trades);
+    }
   } catch {}
 
   // Fetch live signals
