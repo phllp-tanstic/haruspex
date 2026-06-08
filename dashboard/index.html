@@ -39,53 +39,49 @@ body { font-family: 'Inter', sans-serif; background-color: #050505; color: #E5E5
 
 /* ── MOBILE RESPONSIVE ── */
 @media (max-width: 768px) {
-
-  /* Nav */
-  nav .flex.gap-4 { display: none; }
-  nav .px-3 { display: none; }
-
-  /* Header */
-  header { flex-direction: column; gap: 12px; }
-  header .flex.items-center.gap-2 { width: 100%; }
-
-  /* Signal cards — stack to 1 column */
-  .grid.grid-cols-2.lg\\:grid-cols-4 { grid-template-columns: 1fr !important; }
-  .grid.grid-cols-2 { grid-template-columns: 1fr 1fr !important; }
-
+  /* Prevent horizontal overflow */
+  body, main { overflow-x: hidden; }
+  
+  /* Nav — hide secondary items */
+  nav .px-3 { display: none !important; }
+  
+  /* Main padding */
+  main { padding: 16px !important; }
+  
+  /* Header — stack vertically */
+  header { flex-direction: column !important; align-items: flex-start !important; gap: 12px !important; }
+  header .flex.items-center.gap-2 { width: 100% !important; }
+  
+  /* Signal cards — 1 column on mobile */
+  .grid.grid-cols-2.lg\:grid-cols-4 { grid-template-columns: 1fr !important; }
+  
   /* Stats row — 2 columns on mobile */
-  .grid.lg\\:grid-cols-4 { grid-template-columns: 1fr 1fr !important; }
+  .grid.grid-cols-2 { grid-template-columns: 1fr 1fr !important; }
+  .section.grid.grid-cols-2 { grid-template-columns: 1fr 1fr !important; }
 
-  /* Trade log table — hide columns, show as cards */
-  #trade-log .grid {
-    grid-template-columns: 1fr !important;
-    gap: 8px !important;
-  }
-
-  /* Trade log header — hide on mobile */
-  .grid.gap-3.px-4.py-2.text-\\[10px\\] { display: none !important; }
-
-  /* Trade rows — card style on mobile */
-  #trade-log > div > div {
+  /* Trade log — hide table header, show rows as cards */
+  .grid.gap-3.px-4.py-2.border-b { display: none !important; }
+  #trade-log .grid[style*="grid-template-columns"] {
     display: flex !important;
     flex-direction: column !important;
-    gap: 6px !important;
-    padding: 12px !important;
+    gap: 4px !important;
+  }
+  #trade-log .grid[style*="grid-template-columns"] > * {
+    font-size: 11px !important;
   }
 
   /* Risk monitor rows */
-  #risk-positions > div {
-    grid-template-columns: 1fr 1fr !important;
+  #risk-positions > div[style*="grid-template-columns"] {
+    display: flex !important;
+    flex-wrap: wrap !important;
     gap: 6px !important;
   }
 
-  /* Activity log */
+  /* Activity log font */
   #activity-log { font-size: 10px !important; }
 
-  /* Main padding */
-  main { padding: 16px !important; }
-
-  /* Headings */
-  h1 { font-size: 1.5rem !important; }
+  /* Heading size */
+  h1.text-3xl { font-size: 1.4rem !important; line-height: 1.3 !important; }
 }
 
 </style>
