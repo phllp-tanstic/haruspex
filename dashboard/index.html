@@ -36,6 +36,58 @@ body { font-family: 'Inter', sans-serif; background-color: #050505; color: #E5E5
 
 /* Selection */
 ::selection { background: #E0FF00; color: #050505; }
+
+/* ── MOBILE RESPONSIVE ── */
+@media (max-width: 768px) {
+
+  /* Nav */
+  nav .flex.gap-4 { display: none; }
+  nav .px-3 { display: none; }
+
+  /* Header */
+  header { flex-direction: column; gap: 12px; }
+  header .flex.items-center.gap-2 { width: 100%; }
+
+  /* Signal cards — stack to 1 column */
+  .grid.grid-cols-2.lg\\:grid-cols-4 { grid-template-columns: 1fr !important; }
+  .grid.grid-cols-2 { grid-template-columns: 1fr 1fr !important; }
+
+  /* Stats row — 2 columns on mobile */
+  .grid.lg\\:grid-cols-4 { grid-template-columns: 1fr 1fr !important; }
+
+  /* Trade log table — hide columns, show as cards */
+  #trade-log .grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  /* Trade log header — hide on mobile */
+  .grid.gap-3.px-4.py-2.text-\\[10px\\] { display: none !important; }
+
+  /* Trade rows — card style on mobile */
+  #trade-log > div > div {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 6px !important;
+    padding: 12px !important;
+  }
+
+  /* Risk monitor rows */
+  #risk-positions > div {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 6px !important;
+  }
+
+  /* Activity log */
+  #activity-log { font-size: 10px !important; }
+
+  /* Main padding */
+  main { padding: 16px !important; }
+
+  /* Headings */
+  h1 { font-size: 1.5rem !important; }
+}
+
 </style>
 </head>
 <body class="min-h-screen">
