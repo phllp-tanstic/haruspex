@@ -355,8 +355,8 @@ async function loadLiveSignals() {
   // ETH/BTC Ratio — Bitget public API
   try {
     const [ethRes, btcRes] = await Promise.all([
-      fetch('https://corsproxy.io/?https://api.bitget.com/api/v2/spot/market/tickers?symbol=ETHUSDT'),
-      fetch('https://corsproxy.io/?https://api.bitget.com/api/v2/spot/market/tickers?symbol=BTCUSDT')
+      fetch('https://api.allorigins.win/raw?url=https%3A%2F%2Fapi.bitget.com%2Fapi%2Fv2%2Fspot%2Fmarket%2Ftickers%3Fsymbol%3DETHUSDT'),
+      fetch('https://api.allorigins.win/raw?url=https%3A%2F%2Fapi.bitget.com%2Fapi%2Fv2%2Fspot%2Fmarket%2Ftickers%3Fsymbol%3DBTCUSDT')
     ]);
     const ethData = await ethRes.json();
     const btcData = await btcRes.json();
@@ -373,7 +373,7 @@ async function loadLiveSignals() {
 
   // BTC Funding Rate — Bitget public API
   try {
-    const r = await fetch('https://corsproxy.io/?https://api.bitget.com/api/v2/mix/market/current-fund-rate?symbol=BTCUSDT&productType=USDT-FUTURES');
+    const r = await fetch('https://api.allorigins.win/raw?url=https%3A%2F%2Fapi.bitget.com%2Fapi%2Fv2%2Fmix%2Fmarket%2Fcurrent-fund-rate%3Fsymbol%3DBTCUSDT%26productType%3DUSDT-FUTURES');
     const data = await r.json();
     const rate = parseFloat(data.data[0].fundingRate);
     const ratePct = (rate * 100).toFixed(4);
