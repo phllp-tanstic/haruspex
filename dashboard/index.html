@@ -521,25 +521,48 @@ function renderTrades(trades) {
     const signalShort = (t.signal || '').replace('funding-rate-divergence', 'funding-div').replace('stablecoin-depeg', 'stable-depeg').replace('eth-btc-ratio', 'eth-btc').replace('curve-tvl', 'curve-tvl');
 
     return `
-      <div class="grid gap-3 px-4 py-3 bg-[#0A0A0A] border border-white/5 hover:border-white/10 transition-colors text-xs animate-slide-in" style="grid-template-columns: 160px 140px 70px 90px 110px 110px 90px 1fr;">
-        <div class="font-mono-geist text-gray-600">
-          <div class="text-gray-400">${timeStr}</div>
-          <div class="text-[10px]">${dateStr}</div>
-        </div>
-        <div>
-          <span class="px-2 py-0.5 bg-[#E0FF00]/10 border border-[#E0FF00]/20 text-[#E0FF00] text-[9px] font-mono-geist uppercase tracking-widest clip-tag">${signalShort}</span>
-        </div>
-        <div class="font-mono-geist font-semibold ${sideColor}">${sideLabel}</div>
-        <div class="font-mono-geist text-white">${t.asset || '—'}</div>
-        <div class="font-mono-geist text-gray-300">$${(t.entryPrice || 0).toLocaleString()}</div>
-        <div class="font-mono-geist text-[#f87171]">$${(t.stopLossPrice || 0).toLocaleString()}</div>
-        <div class="flex items-center gap-1.5">
-          <div class="w-12 h-1 bg-white/10 rounded-full overflow-hidden">
-            <div class="h-full bg-[#E0FF00] rounded-full" style="width:${conf}%"></div>
+      <div class="trade-row px-4 py-3 bg-[#0A0A0A] border border-white/5 hover:border-white/10 transition-colors animate-slide-in">
+        <!-- Desktop layout -->
+        <div class="hidden md:grid gap-3 text-xs" style="grid-template-columns: 160px 140px 70px 90px 110px 110px 90px 1fr;">
+          <div class="font-mono-geist text-gray-600">
+            <div class="text-gray-400">${timeStr}</div>
+            <div class="text-[10px]">${dateStr}</div>
           </div>
-          <span class="font-mono-geist text-gray-400 text-[10px]">${conf}%</span>
+          <div><span class="px-2 py-0.5 bg-[#E0FF00]/10 border border-[#E0FF00]/20 text-[#E0FF00] text-[9px] font-mono-geist uppercase tracking-widest clip-tag">${signalShort}</span></div>
+          <div class="font-mono-geist font-semibold ${sideColor}">${sideLabel}</div>
+          <div class="font-mono-geist text-white">${t.asset || '—'}</div>
+          <div class="font-mono-geist text-gray-300">$${(t.entryPrice || 0).toLocaleString()}</div>
+          <div class="font-mono-geist text-[#f87171]">$${(t.stopLossPrice || 0).toLocaleString()}</div>
+          <div class="flex items-center gap-1.5">
+            <div class="w-12 h-1 bg-white/10 rounded-full overflow-hidden">
+              <div class="h-full bg-[#E0FF00] rounded-full" style="width:${conf}%"></div>
+            </div>
+            <span class="font-mono-geist text-gray-400 text-[10px]">${conf}%</span>
+          </div>
+          <div class="text-gray-600 text-[10px] leading-relaxed">${t.reason || '—'}</div>
         </div>
-        <div class="text-gray-600 text-[10px] leading-relaxed">${t.reason || '—'}</div>
+        <!-- Mobile layout -->
+        <div class="md:hidden space-y-2 text-xs">
+          <div class="flex items-center justify-between">
+            <div class="font-mono-geist text-gray-500">${timeStr} · ${dateStr}</div>
+            <span class="px-2 py-0.5 bg-[#E0FF00]/10 border border-[#E0FF00]/20 text-[#E0FF00] text-[9px] font-mono-geist uppercase tracking-widest clip-tag">${signalShort}</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="font-mono-geist font-semibold ${sideColor}">${sideLabel}</span>
+            <span class="font-mono-geist text-white">${t.asset || '—'}</span>
+            <div class="flex items-center gap-1 ml-auto">
+              <div class="w-10 h-1 bg-white/10 rounded-full overflow-hidden">
+                <div class="h-full bg-[#E0FF00] rounded-full" style="width:${conf}%"></div>
+              </div>
+              <span class="font-mono-geist text-gray-400 text-[10px]">${conf}%</span>
+            </div>
+          </div>
+          <div class="flex gap-4">
+            <div><span class="text-gray-600 text-[10px]">Entry </span><span class="font-mono-geist text-gray-300">$${(t.entryPrice || 0).toLocaleString()}</span></div>
+            <div><span class="text-gray-600 text-[10px]">SL </span><span class="font-mono-geist text-[#f87171]">$${(t.stopLossPrice || 0).toLocaleString()}</span></div>
+          </div>
+          <div class="text-gray-500 text-[10px] leading-relaxed">${t.reason || '—'}</div>
+        </div>
       </div>`;
   }).join('');
 
