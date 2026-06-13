@@ -4,6 +4,7 @@ const { checkCurveTVL } = require('./signals/curve-tvl');
 const { checkEthBtcRatio } = require('./signals/eth-btc-ratio');
 const { checkStablecoinPeg } = require('./signals/stablecoin-peg');
 const { checkFundingRateDivergence } = require('./signals/funding-rate');
+const { makeTradeDecision } = require('./decider');
 const { executeSignal } = require('./executor');
 const { logNoAction } = require('./logger');
 
@@ -17,8 +18,9 @@ if (TEST_MODE) {
 } else {
   console.log('='.repeat(50));
   console.log('  HARUSPEX — DeFi-to-CEX Signal Agent');
-  console.log('  Bitget Hackathon S1 — Track 3');
-  console.log('  Checking signals every 15 minutes');
+  console.log('  Bitget Hackathon S1 — Track 1');
+  console.log('  LLM-driven decisions via Qwen3.6-plus');
+  console.log('  Checking every 15 minutes');
   console.log('='.repeat(50));
 }
 
@@ -36,58 +38,86 @@ function pushToServer(data) {
 
 async function runSignalCycle() {
   console.log(`\n[${new Date().toISOString()}] Running signal cycle...`);
-  const signals = await Promise.allSettled([
+
+  // Collect raw market data from all 4 sources
+  const [curveData, ethBtcData, stableData, fundingData] = await Promise.all([
     checkCurveTVL(),
     checkEthBtcRatio(),
     checkStablecoinPeg(),
     checkFundingRateDivergence()
   ]);
-  const results = signals.map(s =>
-    s.status === 'fulfilled' ? s.value : { fired: false, reason: s.reason?.message }
-  );
 
-  const ethBtcResult = results[1];
-  const fundingResult = results[3];
+  // Push live state to dashboard
   pushToServer({
-    ethBtcRatio: ethBtcResult.value ?? null,
-    ethBtcReason: ethBtcResult.reason ?? null,
-    fundingRate: fundingResult.value ?? null,
-    fundingReason: fundingResult.reason ?? null,
+    ethBtcRatio: ethBtcData.ethBtcChange ?? null,
+    ethBtcReason: `ETH $${ethBtcData.ethPrice} | BTC $${ethBtcData.btcPrice} | Ratio ${ethBtcData.ethBtcRatio?.toFixed(6)}`,
+    fundingRate: fundingData.fundingRate ?? null,
+    fundingReason: `BTC funding ${fundingData.fundingRate}% | TVL stable: ${fundingData.tvlStable}`,
     lastAgentPing: new Date().toISOString()
   });
 
-  const firedSignals = results.filter(r => r.fired);
-  if (firedSignals.length === 0) {
-    logNoAction(`All ${results.length} signals checked — no thresholds crossed`);
-    return;
-  }
-  // Check open position count before executing
-  const allTrades = require('fs').readdirSync('./logs')
+  // Build unified market data object for LLM
+  const marketData = {
+    curveTVL: curveData.curveTVL,
+    previousCurveTVL: curveData.previousCurveTVL,
+    curveTVLChange: curveData.curveTVLChange,
+    ethPrice: ethBtcData.ethPrice,
+    btcPrice: ethBtcData.btcPrice,
+    ethBtcRatio: ethBtcData.ethBtcRatio,
+    ethBtcChange: ethBtcData.ethBtcChange,
+    usdtDeviation: stableData.usdtDeviation,
+    usdcDeviation: stableData.usdcDeviation,
+    fundingRate: fundingData.fundingRate,
+    tvlStable: fundingData.tvlStable
+  };
+
+  // Check max open positions
+  const fs = require('fs');
+  const allTrades = fs.readdirSync('./logs')
     .filter(f => f.startsWith('haruspex-') && f.endsWith('.json'))
     .flatMap(f => {
       try {
-        const raw = require('fs').readFileSync(`./logs/${f}`, 'utf8').trim();
+        const raw = fs.readFileSync(`./logs/${f}`, 'utf8').trim();
         return raw.startsWith('[') ? JSON.parse(raw) : [];
       } catch { return []; }
     });
+
   const openCount = allTrades.filter(t =>
     t.status === 'PAPER_TRADE_EXECUTED' && !t.closedAt
   ).length;
 
   if (openCount >= 3) {
-    console.log(`[HARUSPEX] Max positions reached (${openCount} open) — skipping execution`);
+    console.log(`[HARUSPEX] Max positions reached (${openCount} open) — skipping LLM decision`);
+    logNoAction(`Max positions reached (${openCount} open) — agent monitoring`);
     return;
   }
 
-  
+  // LLM makes autonomous trade decision
+  console.log(`[HARUSPEX] Consulting Qwen3.6-plus for trade decision...`);
+  const decision = await makeTradeDecision(marketData);
 
-  console.log(`\n[HARUSPEX] ${firedSignals.length} signal(s) fired!`);
-  firedSignals.sort((a, b) => b.confidence - a.confidence);
-  for (const signal of firedSignals) {
-    console.log(`\n[HARUSPEX] Executing: ${signal.signal} (confidence: ${(signal.confidence * 100).toFixed(0)}%)`);
-    await executeSignal(signal);
-    await new Promise(r => setTimeout(r, 2000));
+  if (!decision.shouldTrade) {
+    console.log(`[HARUSPEX] LLM: No trade — ${decision.reasoning}`);
+    logNoAction(decision.reasoning || 'LLM decided no trade conditions met');
+    return;
   }
+
+  // Execute LLM decision
+  console.log(`[HARUSPEX] LLM: TRADE — ${decision.action} ${decision.asset} (confidence: ${Math.round(decision.confidence * 100)}%)`);
+  const signal = {
+    fired: true,
+    signal: decision.signal,
+    confidence: decision.confidence,
+    action: decision.action,
+    assets: [decision.asset],
+    primaryAsset: decision.asset,
+    value: fundingData.fundingRate,
+    reason: decision.reasoning,
+    stopLoss: decision.stopLoss || 0.01,
+    takeProfit: decision.takeProfit || 0.03
+  };
+
+  await executeSignal(signal);
 }
 
 async function main() {

@@ -8,6 +8,7 @@
     "test": "node agent.js --test"
   },
   "dependencies": {
+    "bitget-skill": "^1.1.0",
     "dotenv": "^16.0.0",
     "groq-sdk": "^1.2.1",
     "node-fetch": "^2.7.0"
