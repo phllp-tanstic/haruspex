@@ -38,7 +38,9 @@ CROSS-SIGNAL THESIS FRAMEWORK:
 - DEX/CEX ratio spike alone = rotation signal, wait for confirmation from OI or funding
 - Funding rate extreme (>0.08% or <-0.03%) = standalone signal, trade with medium confidence
 - When signals conflict or data is unavailable, do NOT trade. Patience is edge.
-- You are looking for CONVERGENCE of 2+ signals pointing the same direction.
+- Prefer convergence of 2+ signals, but a single strong signal (funding rate extreme, DEX/CEX ratio >2.5 or <0.8, TVL drop >1.5%, stablecoin depeg >0.05%) is sufficient to trade at lower confidence (0.5-0.65).
+- When DEX/CEX ratio is elevated (>2.0) AND funding rate is non-zero (any direction), that counts as convergence.
+- Err toward trading when any signal is at an interesting level. Missing a trade is worse than a small loss.
 
 Respond ONLY with valid JSON, no markdown, no preamble, no thinking tags:
 {
