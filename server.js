@@ -74,6 +74,19 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify(agentState));
     return;
   }
+  if (req.url === '/api/stats') {
+    try {
+      const { calculateStats } = require('./stats');
+      const stats = calculateStats();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(stats));
+    } catch (err) {
+      res.writeHead(500);
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+  
   if (req.url === '/api/status') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ alive: true, uptime: process.uptime(), timestamp: new Date().toISOString() }));

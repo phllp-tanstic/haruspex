@@ -1,14 +1,15 @@
 require('dotenv').config();
 const http = require('http');
 const { checkCurveTVL } = require('./signals/curve-tvl');
-const { checkEthBtcRatio } = require('./signals/eth-btc-ratio');
 const { checkStablecoinPeg } = require('./signals/stablecoin-peg');
 const { checkFundingRateDivergence } = require('./signals/funding-rate');
+const { checkDexCexDivergence } = require('./signals/dex-cex-volume');
+const { checkOpenInterest } = require('./signals/open-interest');
 const { makeTradeDecision } = require('./decider');
 const { executeSignal } = require('./executor');
 const { logNoAction } = require('./logger');
 
-const CHECK_INTERVAL = 15 * 60 * 1000;
+const CHECK_INTERVAL = 5 * 60 * 1000;
 const TEST_MODE = process.argv.includes('--test');
 
 if (TEST_MODE) {
@@ -17,10 +18,10 @@ if (TEST_MODE) {
   console.log('='.repeat(50));
 } else {
   console.log('='.repeat(50));
-  console.log('  HARUSPEX — DeFi-to-CEX Signal Agent');
+  console.log('  HARUSPEX — DeFi-to-CEX Signal Agent v2.0');
   console.log('  Bitget Hackathon S1 — Track 1');
-  console.log('  LLM-driven decisions via Qwen3.6-plus');
-  console.log('  Checking every 15 minutes');
+  console.log('  5-Signal LLM Engine via Qwen3.6-plus');
+  console.log('  Checking every 5 minutes');
   console.log('='.repeat(50));
 }
 
@@ -37,41 +38,43 @@ function pushToServer(data) {
 }
 
 async function runSignalCycle() {
-  console.log(`\n[${new Date().toISOString()}] Running signal cycle...`);
+  console.log(`\n[${new Date().toISOString()}] Running 5-signal cycle...`);
 
-  // Collect raw market data from all 4 sources
-  const [curveData, ethBtcData, stableData, fundingData] = await Promise.all([
-    checkCurveTVL(),
-    checkEthBtcRatio(),
-    checkStablecoinPeg(),
-    checkFundingRateDivergence()
+  const [curveData, stableData, fundingData, dexCexData, oiData] = await Promise.all([
+    checkCurveTVL().catch(e => { console.error('[agent] curve-tvl failed:', e.message); return {}; }),
+    checkStablecoinPeg().catch(e => { console.error('[agent] stablecoin-peg failed:', e.message); return {}; }),
+    checkFundingRateDivergence().catch(e => { console.error('[agent] funding-rate failed:', e.message); return {}; }),
+    checkDexCexDivergence().catch(e => { console.error('[agent] dex-cex-volume failed:', e.message); return {}; }),
+    checkOpenInterest().catch(e => { console.error('[agent] open-interest failed:', e.message); return {}; })
   ]);
 
-  // Push live state to dashboard
   pushToServer({
-    ethBtcRatio: ethBtcData.ethBtcChange ?? null,
-    ethBtcReason: `ETH $${ethBtcData.ethPrice} | BTC $${ethBtcData.btcPrice} | Ratio ${ethBtcData.ethBtcRatio?.toFixed(6)}`,
     fundingRate: fundingData.fundingRate ?? null,
     fundingReason: `BTC funding ${fundingData.fundingRate}% | TVL stable: ${fundingData.tvlStable}`,
+    dexCexRatio: dexCexData.dexCexRatio ?? null,
+    dexCexReason: `Uniswap $${dexCexData.uniswapTotal24h ? (dexCexData.uniswapTotal24h/1e6).toFixed(1) : 'N/A'}M vs Bitget ETH $${dexCexData.bitgetEthVolume ? (dexCexData.bitgetEthVolume/1e6).toFixed(1) : 'N/A'}M | Ratio: ${dexCexData.dexCexRatio?.toFixed(3)}`,
+    openInterest: oiData.openInterest ?? null,
+    openInterestChange: oiData.openInterestChange ?? null,
     lastAgentPing: new Date().toISOString()
   });
 
-  // Build unified market data object for LLM
   const marketData = {
-    curveTVL: curveData.curveTVL,
-    previousCurveTVL: curveData.previousCurveTVL,
-    curveTVLChange: curveData.curveTVLChange,
-    ethPrice: ethBtcData.ethPrice,
-    btcPrice: ethBtcData.btcPrice,
-    ethBtcRatio: ethBtcData.ethBtcRatio,
-    ethBtcChange: ethBtcData.ethBtcChange,
-    usdtDeviation: stableData.usdtDeviation,
-    usdcDeviation: stableData.usdcDeviation,
-    fundingRate: fundingData.fundingRate,
-    tvlStable: fundingData.tvlStable
+    curveTVL: curveData.curveTVL ?? null,
+    previousCurveTVL: curveData.previousCurveTVL ?? null,
+    curveTVLChange: curveData.curveTVLChange ?? 0,
+    usdtDeviation: stableData.usdtDeviation ?? 0,
+    usdcDeviation: stableData.usdcDeviation ?? 0,
+    dexCexRatio: dexCexData.dexCexRatio ?? null,
+    uniswapVolume: dexCexData.uniswapTotal24h ? (dexCexData.uniswapTotal24h / 1e6).toFixed(1) : null,
+    bitgetEthVolume: dexCexData.bitgetEthVolume ? (dexCexData.bitgetEthVolume / 1e6).toFixed(1) : null,
+    fundingRate: fundingData.fundingRate ?? 0,
+    tvlStable: fundingData.tvlStable ?? true,
+    openInterest: oiData.openInterest ?? null,
+    openInterestChange: oiData.openInterestChange ?? 0
   };
 
-  // Check max open positions
+  console.log(`[HARUSPEX] Signals: CurveTVL=${marketData.curveTVLChange}% | USDT=${marketData.usdtDeviation}% | Funding=${marketData.fundingRate}% | DEX/CEX=${marketData.dexCexRatio?.toFixed(3)} | OI=${marketData.openInterestChange}%`);
+
   const fs = require('fs');
   const allTrades = fs.readdirSync('./logs')
     .filter(f => f.startsWith('haruspex-') && f.endsWith('.json'))
@@ -86,14 +89,13 @@ async function runSignalCycle() {
     t.status === 'PAPER_TRADE_EXECUTED' && !t.closedAt
   ).length;
 
-  if (openCount >= 3) {
+  if (openCount >= 1) {
     console.log(`[HARUSPEX] Max positions reached (${openCount} open) — skipping LLM decision`);
     logNoAction(`Max positions reached (${openCount} open) — agent monitoring`);
     return;
   }
 
-  // LLM makes autonomous trade decision
-  console.log(`[HARUSPEX] Consulting Qwen3.6-plus for trade decision...`);
+  console.log(`[HARUSPEX] Consulting Qwen3.6-plus...`);
   const decision = await makeTradeDecision(marketData);
 
   if (!decision.shouldTrade) {
@@ -102,7 +104,6 @@ async function runSignalCycle() {
     return;
   }
 
-  // Execute LLM decision
   console.log(`[HARUSPEX] LLM: TRADE — ${decision.action} ${decision.asset} (confidence: ${Math.round(decision.confidence * 100)}%)`);
   const signal = {
     fired: true,
@@ -113,8 +114,8 @@ async function runSignalCycle() {
     primaryAsset: decision.asset,
     value: fundingData.fundingRate,
     reason: decision.reasoning,
-    stopLoss: decision.stopLoss || 0.01,
-    takeProfit: decision.takeProfit || 0.03
+    stopLoss: decision.stopLoss || 0.005,
+    takeProfit: decision.takeProfit || 0.01
   };
 
   await executeSignal(signal);
@@ -128,7 +129,7 @@ async function main() {
     process.exit(0);
   }
   setInterval(runSignalCycle, CHECK_INTERVAL);
-  console.log(`\n[HARUSPEX] Agent running. Next check in 15 minutes.`);
+  console.log(`\n[HARUSPEX] Agent running. Next check in 5 minutes.`);
   console.log('[HARUSPEX] Press Ctrl+C to stop.\n');
 }
 

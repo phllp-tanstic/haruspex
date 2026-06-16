@@ -283,6 +283,36 @@ body { font-family: 'Inter', sans-serif; background-color: #050505; color: #E5E5
     </div>
   </section>
 
+<!-- PERFORMANCE STATS -->
+  <section>
+    <div class="flex items-center gap-2 mb-4 pb-3 border-b border-white/5">
+      <div class="w-1.5 h-1.5 bg-[#E0FF00]"></div>
+      <h2 class="text-[10px] font-mono-geist uppercase tracking-widest text-gray-400">Performance_Metrics</h2>
+    </div>
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-4" id="perf-stats">
+      <div class="p-4 bg-[#0F0F0F] border border-white/5 clip-chamfer">
+        <div class="text-[10px] font-mono-geist uppercase tracking-widest text-gray-600 mb-1">Win Rate</div>
+        <div id="stat-winrate" class="text-xl font-semibold text-[#E0FF00]">—</div>
+      </div>
+      <div class="p-4 bg-[#0F0F0F] border border-white/5 clip-chamfer">
+        <div class="text-[10px] font-mono-geist uppercase tracking-widest text-gray-600 mb-1">Total PnL</div>
+        <div id="stat-pnl" class="text-xl font-semibold text-white">—</div>
+      </div>
+      <div class="p-4 bg-[#0F0F0F] border border-white/5 clip-chamfer">
+        <div class="text-[10px] font-mono-geist uppercase tracking-widest text-gray-600 mb-1">Sharpe Ratio</div>
+        <div id="stat-sharpe" class="text-xl font-semibold text-white">—</div>
+      </div>
+      <div class="p-4 bg-[#0F0F0F] border border-white/5 clip-chamfer">
+        <div class="text-[10px] font-mono-geist uppercase tracking-widest text-gray-600 mb-1">Max Drawdown</div>
+        <div id="stat-drawdown" class="text-xl font-semibold text-[#f87171]">—</div>
+      </div>
+      <div class="p-4 bg-[#0F0F0F] border border-white/5 clip-chamfer">
+        <div class="text-[10px] font-mono-geist uppercase tracking-widest text-gray-600 mb-1">Profit Factor</div>
+        <div id="stat-profitfactor" class="text-xl font-semibold text-white">—</div>
+      </div>
+    </div>
+  </section>
+
   <!-- TRADE LOG -->
   <section>
     <div class="flex items-center justify-between mb-4 pb-3 border-b border-white/5">

@@ -3,36 +3,53 @@ const https = require('https');
 
 async function makeTradeDecision(marketData) {
   try {
-    const prompt = `You are Haruspex, an autonomous DeFi-to-CEX trading agent. Analyze the following live market data and decide whether to place a trade.
+    const prompt = `You are Haruspex, an autonomous DeFi-to-CEX trading agent. Analyze the following live market data across five cross-environment signals and decide whether to place a trade.
 
-LIVE MARKET DATA:
-- Curve Finance TVL: $${marketData.curveTVL ? (marketData.curveTVL / 1e9).toFixed(2) + 'B' : 'unavailable'} (change: ${marketData.curveTVLChange ?? 0}%)
-- ETH Price: $${marketData.ethPrice ?? 'unavailable'}
-- BTC Price: $${marketData.btcPrice ?? 'unavailable'}
-- ETH/BTC Ratio: ${marketData.ethBtcRatio ?? 'unavailable'} (change: ${marketData.ethBtcChange ?? 0}%)
-- USDT Peg Deviation: ${marketData.usdtDeviation ?? 0}% from $1.00
-- USDC Peg Deviation: ${marketData.usdcDeviation ?? 0}% from $1.00
-- BTC Perpetual Funding Rate: ${marketData.fundingRate ?? 0}%
-- DeFi TVL Stability: ${marketData.tvlStable ? 'Stable above $1B' : 'Unstable'}
+LIVE MARKET DATA — 5 SIGNALS:
 
-YOUR DECISION FRAMEWORK:
-- Negative funding rate + stable TVL = shorts overleveraged → consider LONG BTC
-- Stablecoin depeg + DeFi stress = systemic risk → consider SHORT BTC/ETH
-- ETH/BTC ratio dropping = capital rotating to BTC → consider SHORT ETH, LONG BTC
-- Curve TVL dropping sharply = DeFi liquidity stress → consider SHORT ETH
-- When signals conflict, weigh them together and decide the dominant thesis
-- When no clear edge exists, do NOT trade
+[SIGNAL 1 — DeFi Liquidity]
+- Curve Finance TVL: $${marketData.curveTVL ? (marketData.curveTVL / 1e9).toFixed(2) + 'B' : 'unavailable'}
+- TVL Change: ${marketData.curveTVLChange ?? 0}%
+- Interpretation: A sharp drop (>2%) signals DeFi deleveraging and systemic liquidity stress
 
-Respond ONLY with a valid JSON object, no other text, no markdown:
+[SIGNAL 2 — Stablecoin Peg Stability]
+- USDT Deviation from $1.00: ${marketData.usdtDeviation ?? 0}%
+- USDC Deviation from $1.00: ${marketData.usdcDeviation ?? 0}%
+- Interpretation: Depeg >0.1% signals panic/systemic stress. Depeg >0.3% is severe.
+
+[SIGNAL 3 — DEX vs CEX Volume Divergence]
+- Uniswap V3 24h Volume: $${marketData.uniswapVolume ?? 'unavailable'}M
+- Bitget ETH 24h Volume: $${marketData.bitgetEthVolume ?? 'unavailable'}M
+- DEX/CEX Ratio: ${marketData.dexCexRatio?.toFixed(3) ?? 'unavailable'}
+- Interpretation: Ratio >2.0 = traders rotating to DeFi, precedes CEX volatility. Ratio <1.0 = CEX dominance, trend continuation likely.
+
+[SIGNAL 4 — BTC Perpetual Funding Rate]
+- Current Funding Rate: ${marketData.fundingRate ?? 0}%
+- Interpretation: Negative rate = overleveraged shorts = squeeze risk → LONG bias. Positive rate >0.05% = overleveraged longs = flush risk → SHORT bias.
+
+[SIGNAL 5 — BTC Open Interest]
+- Current Open Interest: ${marketData.openInterest ? marketData.openInterest.toFixed(0) + ' BTC' : 'unavailable'}
+- OI Change: ${marketData.openInterestChange ?? 0}%
+- Interpretation: OI spike (+5%+) while DeFi TVL drops = leverage building on CEX as DeFi deleverages. High-conviction divergence signal.
+
+CROSS-SIGNAL THESIS FRAMEWORK:
+- OI rising + TVL dropping + negative funding = extreme short squeeze setup → LONG BTC (high confidence)
+- Stablecoin depeg + TVL drop + DEX/CEX ratio spike = systemic DeFi stress → SHORT BTC/ETH
+- DEX/CEX ratio spike alone = rotation signal, wait for confirmation from OI or funding
+- Funding rate extreme (>0.08% or <-0.03%) = standalone signal, trade with medium confidence
+- When signals conflict or data is unavailable, do NOT trade. Patience is edge.
+- You are looking for CONVERGENCE of 2+ signals pointing the same direction.
+
+Respond ONLY with valid JSON, no markdown, no preamble, no thinking tags:
 {
   "shouldTrade": true or false,
   "action": "LONG" or "SHORT" or null,
   "asset": "BTCUSDT" or "ETHUSDT" or null,
   "confidence": 0.0 to 1.0,
-  "signal": "funding-rate-divergence" or "stablecoin-depeg" or "eth-btc-ratio" or "curve-tvl" or null,
-  "reasoning": "2-3 sentence explanation of your decision referencing specific numbers",
-  "stopLoss": 0.01 to 0.03,
-  "takeProfit": 0.02 to 0.08
+  "signal": "open-interest-divergence" or "stablecoin-depeg" or "funding-rate-squeeze" or "dex-cex-rotation" or "curve-tvl-stress" or "multi-signal-convergence" or null,
+  "reasoning": "2-3 sentences referencing specific signal values that drove this decision",
+  "stopLoss": 0.005,
+  "takeProfit": 0.01
 }`;
 
     const body = JSON.stringify({
@@ -40,7 +57,7 @@ Respond ONLY with a valid JSON object, no other text, no markdown:
       messages: [
         {
           role: 'system',
-          content: 'You are an autonomous trading agent. You must respond with valid JSON only. No markdown, no explanation outside the JSON, no thinking tags in output.'
+          content: 'You are an autonomous trading agent. Respond with valid JSON only. No markdown, no explanation outside the JSON, no thinking tags.'
         },
         { role: 'user', content: prompt }
       ],
@@ -84,7 +101,8 @@ Respond ONLY with a valid JSON object, no other text, no markdown:
       .trim();
 
     const decision = JSON.parse(cleaned);
-    console.log(`[Decider] shouldTrade: ${decision.shouldTrade} | ${decision.reasoning}`);
+    console.log(`[Decider] shouldTrade=${decision.shouldTrade} | signal=${decision.signal} | confidence=${decision.confidence}`);
+    console.log(`[Decider] Reasoning: ${decision.reasoning}`);
     return decision;
 
   } catch (err) {

@@ -1,0 +1,15 @@
+{
+  "totalTrades": 0,
+  "closedTrades": 3,
+  "openPositions": 0,
+  "winRate": "100.0%",
+  "totalPnL": "2.07%",
+  "avgPnLPerTrade": "0.69%",
+  "avgWin": "0.69%",
+  "avgLoss": "0%",
+  "maxDrawdown": "0.00%",
+  "sharpeRatio": "18.44",
+  "profitFactor": "N/A",
+  "wins": 3,
+  "losses": 0
+}
