@@ -1,5 +1,6 @@
 require('dotenv').config();
 const http = require('http');
+const https = require('https');
 const { checkCurveTVL } = require('./signals/curve-tvl');
 const { checkStablecoinPeg } = require('./signals/stablecoin-peg');
 const { checkFundingRateDivergence } = require('./signals/funding-rate');
@@ -48,6 +49,22 @@ async function runSignalCycle() {
     checkOpenInterest().catch(e => { console.error('[agent] open-interest failed:', e.message); return {}; })
   ]);
 
+  // Fetch BTC 24h price momentum from Bitget ticker
+  let btcChange24h = 0;
+  try {
+    const tickerData = await new Promise((resolve, reject) => {
+      https.get('https://api.bitget.com/api/v2/spot/market/tickers?symbol=BTCUSDT', (res) => {
+        let raw = '';
+        res.on('data', d => raw += d);
+        res.on('end', () => resolve(JSON.parse(raw)));
+      }).on('error', reject);
+    });
+    btcChange24h = parseFloat(tickerData.data[0]?.change24h ?? 0) * 100;
+    console.log(`[BTC Momentum] 24h change: ${btcChange24h.toFixed(3)}%`);
+  } catch (e) {
+    console.error('[BTC Momentum] Failed:', e.message);
+  }
+
   pushToServer({
     fundingRate: fundingData.fundingRate ?? null,
     fundingReason: `BTC funding ${fundingData.fundingRate}% | TVL stable: ${fundingData.tvlStable}`,
@@ -70,10 +87,11 @@ async function runSignalCycle() {
     fundingRate: fundingData.fundingRate ?? 0,
     tvlStable: fundingData.tvlStable ?? true,
     openInterest: oiData.openInterest ?? null,
-    openInterestChange: oiData.openInterestChange ?? 0
+    openInterestChange: oiData.openInterestChange ?? 0,
+    btcChange24h: btcChange24h
   };
 
-  console.log(`[HARUSPEX] Signals: CurveTVL=${marketData.curveTVLChange}% | USDT=${marketData.usdtDeviation}% | Funding=${marketData.fundingRate}% | DEX/CEX=${marketData.dexCexRatio?.toFixed(3)} | OI=${marketData.openInterestChange}%`);
+  console.log(`[HARUSPEX] Signals: CurveTVL=${marketData.curveTVLChange}% | USDT=${marketData.usdtDeviation}% | Funding=${marketData.fundingRate}% | DEX/CEX=${marketData.dexCexRatio?.toFixed(3)} | OI=${marketData.openInterestChange}% | BTC24h=${marketData.btcChange24h?.toFixed(3)}%`);
 
   const fs = require('fs');
   const allTrades = fs.readdirSync('./logs')
@@ -114,8 +132,8 @@ async function runSignalCycle() {
     primaryAsset: decision.asset,
     value: fundingData.fundingRate,
     reason: decision.reasoning,
-    stopLoss: decision.stopLoss || 0.005,
-    takeProfit: decision.takeProfit || 0.01
+    stopLoss: decision.stopLoss || 0.008,
+    takeProfit: decision.takeProfit || 0.016
   };
 
   await executeSignal(signal);

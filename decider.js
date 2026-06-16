@@ -26,6 +26,12 @@ LIVE MARKET DATA — 5 SIGNALS:
 [SIGNAL 4 — BTC Perpetual Funding Rate]
 - Current Funding Rate: ${marketData.fundingRate ?? 0}%
 - Interpretation: Negative rate = overleveraged shorts = squeeze risk → LONG bias. Positive rate >0.05% = overleveraged longs = flush risk → SHORT bias.
+- BTC 24h Price Change: ${marketData.btcChange24h ?? 'unavailable'}%
+- Interpretation: Negative = bearish momentum, positive = bullish momentum. Use this to confirm directional bias.
+
+[SIGNAL 6 — BTC Price Momentum]
+- BTC 24h Price Change: ${marketData.btcChange24h ?? 0}%
+- Interpretation: Negative = bearish momentum. Positive = bullish momentum. Use to confirm trade direction.
 
 [SIGNAL 5 — BTC Open Interest]
 - Current Open Interest: ${marketData.openInterest ? marketData.openInterest.toFixed(0) + ' BTC' : 'unavailable'}
@@ -35,12 +41,15 @@ LIVE MARKET DATA — 5 SIGNALS:
 CROSS-SIGNAL THESIS FRAMEWORK:
 - OI rising + TVL dropping + negative funding = extreme short squeeze setup → LONG BTC (high confidence)
 - Stablecoin depeg + TVL drop + DEX/CEX ratio spike = systemic DeFi stress → SHORT BTC/ETH
-- DEX/CEX ratio spike alone = rotation signal, wait for confirmation from OI or funding
-- Funding rate extreme (>0.08% or <-0.03%) = standalone signal, trade with medium confidence
-- When signals conflict or data is unavailable, do NOT trade. Patience is edge.
-- Prefer convergence of 2+ signals, but a single strong signal (funding rate extreme, DEX/CEX ratio >2.5 or <0.8, TVL drop >1.5%, stablecoin depeg >0.05%) is sufficient to trade at lower confidence (0.5-0.65).
-- When DEX/CEX ratio is elevated (>2.0) AND funding rate is non-zero (any direction), that counts as convergence.
-- Err toward trading when any signal is at an interesting level. Missing a trade is worse than a small loss.
+- DEX/CEX ratio spike alone = rotation signal, requires confirmation from funding rate OR OI change
+- When funding rate is NEGATIVE (below -0.001%), shorts are dominant → LONG bias correct
+- When funding rate is POSITIVE (above +0.001%), longs are crowded → SHORT bias correct
+- When funding rate is between -0.001% and +0.001%, it is NOISE — ignore it, do not use as confirmation
+- BTC 24h momentum confirms direction: if btcChange24h is negative, do NOT open LONG. If positive, do NOT open SHORT.
+- High confidence trade (0.7+): DEX/CEX >2.0 AND funding confirms direction AND momentum confirms direction
+- Medium confidence trade (0.55-0.65): One strong signal (funding extreme OR DEX/CEX >2.5) AND momentum confirms
+- Do NOT trade when funding is in noise zone AND DEX/CEX is the only signal
+- When signals conflict or data is unavailable, do NOT trade. Precision over frequency.
 
 Respond ONLY with valid JSON, no markdown, no preamble, no thinking tags:
 {

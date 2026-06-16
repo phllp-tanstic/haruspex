@@ -1,7 +1,34 @@
 require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
 const { execSync } = require('child_process');
 const { writeLog } = require('./logger');
 const { generateReasoning } = require('./reasoner');
+
+const STARTING_BALANCE = 10000;
+const LOG_DIR = path.join(__dirname, 'logs');
+
+function getCurrentBalance() {
+  try {
+    const files = fs.readdirSync(LOG_DIR)
+      .filter(f => f.startsWith('haruspex-') && f.endsWith('.json'))
+      .sort();
+    let balance = STARTING_BALANCE;
+    for (const f of files) {
+      try {
+        const trades = JSON.parse(fs.readFileSync(path.join(LOG_DIR, f), 'utf8'));
+        for (const t of trades) {
+          if (t.balanceAfter && typeof t.balanceAfter === 'number') {
+            balance = t.balanceAfter;
+          }
+        }
+      } catch {}
+    }
+    return parseFloat(balance.toFixed(2));
+  } catch {
+    return STARTING_BALANCE;
+  }
+}
 
 function getPositionSize(confidence) {
   if (confidence >= 0.85) return '0.05';
@@ -37,7 +64,9 @@ async function placePaperTrade(signal) {
     console.log(`[EXECUTOR] Stop loss:   $${stopLossPrice}`);
     console.log(`[EXECUTOR] Take profit: $${takeProfitPrice}`);
 
-    // Generate LLM reasoning
+    const balanceBefore = getCurrentBalance();
+    console.log(`[EXECUTOR] Account balance: $${balanceBefore}`);
+
     console.log(`[EXECUTOR] Generating LLM reasoning...`);
     const llmReason = await generateReasoning({
       ...signal,
@@ -62,10 +91,14 @@ async function placePaperTrade(signal) {
       rawReason: reason,
       llmGenerated: true,
       status: 'PAPER_TRADE_EXECUTED',
-      paperTrade: true
+      paperTrade: true,
+      balanceBefore,
+      balanceAfter: null,
+      balanceChange: null
     });
 
     return { success: true, logEntry };
+
   } catch (error) {
     console.error(`[EXECUTOR] Failed: ${error.message}`);
     const logEntry = writeLog({
@@ -82,19 +115,8 @@ async function placePaperTrade(signal) {
   }
 }
 
-async function executeDivergenceSignal(signal) {
-  console.log(`[EXECUTOR] Divergence signal — executing paired trade`);
-  const results = [];
-  results.push(await placePaperTrade({ ...signal, action: 'SHORT', primaryAsset: signal.assets[0] }));
-  results.push(await placePaperTrade({ ...signal, action: 'LONG', primaryAsset: signal.assets[1] }));
-  return results;
-}
-
 async function executeSignal(signal) {
   if (!signal.fired) return null;
-  if (signal.action === 'DIVERGENCE') {
-    return executeDivergenceSignal(signal);
-  }
   return placePaperTrade(signal);
 }
 
