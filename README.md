@@ -1,5 +1,21 @@
-# Haruspex — DeFi-to-CEX Signal Agent
-> Bitget AI Hackathon S1 · Track 1 — Trading Agent
+<p align="center">
+  <img src="https://img.shields.io/badge/Bitget_Hackathon_S1-Track_1-E0FF00?style=for-the-badge&labelColor=050505" />
+  <img src="https://img.shields.io/badge/Status-Live-4ade80?style=for-the-badge&labelColor=050505" />
+  <img src="https://img.shields.io/badge/LLM-Qwen3.6--plus-white?style=for-the-badge&labelColor=050505" />
+  <img src="https://img.shields.io/badge/Signals-6_Cross--Environment-E0FF00?style=for-the-badge&labelColor=050505" />
+</p>
+<h1 align="center">HARUSPEX</h1>
+<h3 align="center">Autonomous DeFi-to-CEX Signal Agent</h3>
+<p align="center">
+  <em>Haruspex (n.): An ancient diviner who read entrails to predict the future.<br>This agent reads DeFi entrails to predict CEX price moves.</em>
+</p>
+<p align="center">
+  <a href="https://haruspex.netlify.app"><strong>Live Demo →</strong></a>
+  &nbsp;·&nbsp;
+  <a href="./logs"><strong>Paper Trading Log →</strong></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/phllp-tanstic/haruspex"><strong>GitHub →</strong></a>
+</p>
 
 Haruspex is an Autonomous Systemic Risk Intelligence Agent that detects emerging contagion risks across DeFi infrastructure and automatically executes defensive hedges before those risks propagate into centralized markets.
 
