@@ -4,36 +4,50 @@ const path = require('path');
 const { execSync } = require('child_process');
 const http = require('http');
 
+// ── Constants ──────────────────────────────────────────────
 const LOG_DIR = path.join(__dirname, 'logs');
 const CHECK_INTERVAL = 60 * 1000;
-const MAX_OPEN_POSITIONS = 3;
+const MAX_OPEN_POSITIONS = 2;
 const STARTING_BALANCE = 10000;
+const MAX_PRICE_FAILURES = 3;
 
+// ── Circuit Breaker State (module-level — persists across cycles) ──
+let consecutivePriceFailures = 0;
+let lastKnownPrices = {};
+
+// ── Dashboard Push ─────────────────────────────────────────
 function postRiskState(positions, warning) {
-  const body = JSON.stringify({ positions, warning, lastRiskPing: new Date().toISOString() });
+  const body = JSON.stringify({
+    positions,
+    warning,
+    lastRiskPing: new Date().toISOString()
+  });
   const req = http.request({
     hostname: 'localhost', port: 3000,
     path: '/api/risk', method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(body)
+    }
   });
   req.on('error', () => {});
   req.write(body);
   req.end();
 }
 
+// ── Price Fetcher ──────────────────────────────────────────
 function getCurrentPrice(symbol) {
-  try {
-    const output = execSync(`bgc spot spot_get_ticker --symbol ${symbol}`, {
-      encoding: 'utf8', timeout: 10000
-    });
-    const data = JSON.parse(output);
-    if (data.data && data.data[0]) return parseFloat(data.data[0].lastPr);
-    throw new Error('No price data');
-  } catch (err) {
-    throw new Error(`Price fetch failed for ${symbol}: ${err.message}`);
-  }
+  const output = execSync(`bgc spot spot_get_ticker --symbol ${symbol}`, {
+    encoding: 'utf8',
+    timeout: 12000,
+    windowsHide: true
+  });
+  const data = JSON.parse(output);
+  if (data.data && data.data[0]) return parseFloat(data.data[0].lastPr);
+  throw new Error(`No price data returned for ${symbol}`);
 }
 
+// ── Log File Helpers ───────────────────────────────────────
 function getAllLogFiles() {
   try {
     return fs.readdirSync(LOG_DIR)
@@ -44,15 +58,14 @@ function getAllLogFiles() {
 }
 
 function readAllTrades() {
-  let allTrades = [];
+  let all = [];
   for (const file of getAllLogFiles()) {
     try {
       const raw = fs.readFileSync(file, 'utf8').trim();
-      if (!raw) continue;
-      if (raw.startsWith('[')) allTrades = allTrades.concat(JSON.parse(raw));
+      if (raw.startsWith('[')) all = all.concat(JSON.parse(raw));
     } catch {}
   }
-  return allTrades;
+  return all;
 }
 
 function getLatestBalance() {
@@ -71,7 +84,7 @@ function writeTradeback(trade) {
     try {
       const raw = fs.readFileSync(file, 'utf8').trim();
       if (!raw.includes(trade.id)) continue;
-      let trades = JSON.parse(raw);
+      const trades = JSON.parse(raw);
       const idx = trades.findIndex(t => t.id === trade.id);
       if (idx !== -1) {
         trades[idx] = trade;
@@ -83,6 +96,7 @@ function writeTradeback(trade) {
   }
 }
 
+// ── Close Position ─────────────────────────────────────────
 function closeTrade(trade, currentPrice, reason) {
   const isLong = trade.side === 'buy';
   const pnlPercent = isLong
@@ -105,28 +119,45 @@ function closeTrade(trade, currentPrice, reason) {
 
   writeTradeback(trade);
 
-  console.log(`[Risk] ${reason === 'STOP_LOSS_HIT' ? '🔴' : '🟢'} ${reason} — ${trade.asset} @ $${currentPrice} | PnL: ${pnlPercent}% ($${balanceChange.toFixed(2)}) | Balance: $${balanceAfter}`);
+  const icon = reason === 'TAKE_PROFIT_HIT' ? '🟢' : reason === 'CIRCUIT_BREAKER_CLOSE' ? '🟡' : '🔴';
+  console.log(`[Risk] ${icon} ${reason} — ${trade.asset} @ $${currentPrice} | PnL: ${pnlPercent}% ($${balanceChange.toFixed(2)}) | Balance: $${balanceAfter}`);
 }
 
+// ── Main Check Loop ────────────────────────────────────────
 async function checkOpenPositions() {
   const allTrades = readAllTrades();
   const openTrades = allTrades.filter(t =>
     t.status === 'PAPER_TRADE_EXECUTED' && !t.closedAt
   );
 
-  console.log(`\n[Risk] ${new Date().toISOString()} — Checking ${openTrades.length} open position(s) | Balance: $${getLatestBalance()}`);
+  const balance = getLatestBalance();
+  console.log(`\n[Risk] ${new Date().toISOString()} — Checking ${openTrades.length} open position(s) | Balance: $${balance}`);
 
   if (openTrades.length > MAX_OPEN_POSITIONS) {
-    console.log(`[Risk] ⚠️  WARNING: ${openTrades.length} open positions exceeds max of ${MAX_OPEN_POSITIONS}`);
+    console.log(`[Risk] ⚠️  WARNING: ${openTrades.length} positions exceeds max of ${MAX_OPEN_POSITIONS}`);
+  }
+
+  if (openTrades.length === 0) {
+    postRiskState([], false);
+    return;
   }
 
   for (const trade of openTrades) {
     try {
       const currentPrice = getCurrentPrice(trade.asset);
+
+      // Circuit breaker: reset failure count on success
+      consecutivePriceFailures = 0;
+      lastKnownPrices[trade.asset] = currentPrice;
+
       const isLong = trade.side === 'buy';
+      const livePnl = isLong
+        ? (((currentPrice - trade.entryPrice) / trade.entryPrice) * 100).toFixed(2)
+        : (((trade.entryPrice - currentPrice) / trade.entryPrice) * 100).toFixed(2);
 
-      console.log(`[Risk] ${trade.asset} | Entry: $${trade.entryPrice} | Current: $${currentPrice} | SL: $${trade.stopLossPrice} | TP: $${trade.takeProfitPrice}`);
+      console.log(`[Risk] ${trade.asset} | Entry: $${trade.entryPrice} | Current: $${currentPrice} | SL: $${trade.stopLossPrice} | TP: $${trade.takeProfitPrice} | PnL: ${livePnl}%`);
 
+      // SL/TP checks
       if (isLong && currentPrice <= trade.stopLossPrice) {
         closeTrade(trade, currentPrice, 'STOP_LOSS_HIT');
       } else if (!isLong && currentPrice >= trade.stopLossPrice) {
@@ -136,37 +167,61 @@ async function checkOpenPositions() {
       } else if (!isLong && currentPrice <= trade.takeProfitPrice) {
         closeTrade(trade, currentPrice, 'TAKE_PROFIT_HIT');
       } else {
-        const pnl = isLong
-          ? (((currentPrice - trade.entryPrice) / trade.entryPrice) * 100).toFixed(2)
-          : (((trade.entryPrice - currentPrice) / trade.entryPrice) * 100).toFixed(2);
-        console.log(`[Risk] ✅ Position healthy — PnL: ${pnl}%`);
+        console.log(`[Risk] ✅ Position healthy`);
       }
 
     } catch (err) {
-      console.error(`[Risk] Error checking ${trade.asset}: ${err.message}`);
+      consecutivePriceFailures++;
+      console.error(`[Risk] ⚠️ Price fetch failed (${consecutivePriceFailures}/${MAX_PRICE_FAILURES}): ${err.message}`);
+
+      // Circuit breaker: force-close at last known price after 3 consecutive failures
+      if (consecutivePriceFailures >= MAX_PRICE_FAILURES) {
+        const lastPrice = lastKnownPrices[trade.asset];
+        if (lastPrice) {
+          console.error(`[Risk] 🚨 CIRCUIT BREAKER TRIGGERED — closing ${trade.asset} at last known price $${lastPrice} to prevent runaway loss`);
+          closeTrade(trade, lastPrice, 'CIRCUIT_BREAKER_CLOSE');
+        } else {
+          console.error(`[Risk] 🚨 CIRCUIT BREAKER — no last known price for ${trade.asset}. Position left open — check VPN immediately.`);
+        }
+        consecutivePriceFailures = 0;
+      }
     }
   }
 
-  const livePositions = openTrades
-    .filter(t => !t.closedAt)
-    .map(t => {
-      const currentPrice = (() => { try { return getCurrentPrice(t.asset); } catch { return null; } })();
-      const isLong = t.side === 'buy';
-      const pnl = currentPrice
-        ? isLong
-          ? (((currentPrice - t.entryPrice) / t.entryPrice) * 100).toFixed(2)
-          : (((t.entryPrice - currentPrice) / t.entryPrice) * 100).toFixed(2)
-        : null;
-      return { id: t.id, asset: t.asset, side: t.side, entryPrice: t.entryPrice, stopLossPrice: t.stopLossPrice, takeProfitPrice: t.takeProfitPrice, currentPrice, pnl };
-    });
+  // Push live positions to dashboard
+  const stillOpen = openTrades.filter(t => !t.closedAt);
+  const livePositions = stillOpen.map(t => {
+    const currentPrice = (() => {
+      try { return lastKnownPrices[t.asset] || getCurrentPrice(t.asset); }
+      catch { return null; }
+    })();
+    const isLong = t.side === 'buy';
+    const pnl = currentPrice
+      ? isLong
+        ? (((currentPrice - t.entryPrice) / t.entryPrice) * 100).toFixed(2)
+        : (((t.entryPrice - currentPrice) / t.entryPrice) * 100).toFixed(2)
+      : null;
+    return {
+      id: t.id,
+      asset: t.asset,
+      side: t.side,
+      entryPrice: t.entryPrice,
+      stopLossPrice: t.stopLossPrice,
+      takeProfitPrice: t.takeProfitPrice,
+      currentPrice,
+      pnl
+    };
+  });
 
   postRiskState(livePositions, openTrades.length > MAX_OPEN_POSITIONS);
 }
 
+// ── Start ──────────────────────────────────────────────────
 console.log('═'.repeat(50));
-console.log('  HARUSPEX — Risk Manager');
-console.log('  Monitoring stop loss / take profit every 60s');
-console.log(`  Starting balance: $${STARTING_BALANCE} USDT`);
+console.log('  HARUSPEX — Risk Manager v2.1');
+console.log('  SL/TP monitor every 60s');
+console.log('  Circuit breaker: 3 consecutive price failures');
+console.log(`  Max positions: ${MAX_OPEN_POSITIONS} | Starting balance: $${STARTING_BALANCE}`);
 console.log('═'.repeat(50));
 
 checkOpenPositions();

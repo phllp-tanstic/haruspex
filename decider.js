@@ -5,7 +5,7 @@ async function makeTradeDecision(marketData) {
   try {
     const prompt = `You are Haruspex, an autonomous DeFi-to-CEX trading agent. Analyze the following live market data across five cross-environment signals and decide whether to place a trade.
 
-LIVE MARKET DATA — 5 SIGNALS:
+LIVE MARKET DATA — 6 SIGNALS:
 
 [SIGNAL 1 — DeFi Liquidity]
 - Curve Finance TVL: $${marketData.curveTVL ? (marketData.curveTVL / 1e9).toFixed(2) + 'B' : 'unavailable'}
@@ -52,11 +52,15 @@ MOMENTUM RULES (these override funding bias when in conflict):
 - When funding conflicts with momentum: IGNORE funding, follow momentum direction.
 - Example: funding negative (LONG bias) + momentum negative = open SHORT, not LONG, not no-trade.
 - Example: funding positive (SHORT bias) + momentum positive = open LONG, not SHORT, not no-trade.
+- HARD RULE: When fundingRate is POSITIVE (above +0.002%), opening a LONG is FORBIDDEN regardless of any other signal. Positive funding means longs are already overcrowded.
+- HARD RULE: When fundingRate is NEGATIVE (below -0.002%), opening a SHORT is FORBIDDEN regardless of any other signal. Negative funding means shorts are already overcrowded.
+- These funding hard rules exist to prevent entering a crowded trade. They cannot be overridden by DEX/CEX ratio or TVL signals.
 
 CONFIDENCE LEVELS:
 - High (0.70-0.85): momentum + funding AGREE on direction + DEX/CEX >2.0
 - Medium (0.55-0.65): momentum alone is clear + any one other signal confirms
 - Low (below 0.55): do not trade
+
 
 DO NOT park when signals conflict. Momentum is the tiebreaker. Always resolve to a direction.
 Only park when ALL signals are noise (funding in noise zone AND momentum near 0 AND DEX/CEX <1.5).

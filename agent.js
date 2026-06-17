@@ -65,6 +65,7 @@ async function runSignalCycle() {
     console.error('[BTC Momentum] Failed:', e.message);
   }
 
+
   pushToServer({
     fundingRate: fundingData.fundingRate ?? null,
     fundingReason: `BTC funding ${fundingData.fundingRate}% | TVL stable: ${fundingData.tvlStable}`,
@@ -88,7 +89,7 @@ async function runSignalCycle() {
     tvlStable: fundingData.tvlStable ?? true,
     openInterest: oiData.openInterest ?? null,
     openInterestChange: oiData.openInterestChange ?? 0,
-    btcChange24h: btcChange24h
+    btcChange24h: btcChange24h,
   };
 
   console.log(`[HARUSPEX] Signals: CurveTVL=${marketData.curveTVLChange}% | USDT=${marketData.usdtDeviation}% | Funding=${marketData.fundingRate}% | DEX/CEX=${marketData.dexCexRatio?.toFixed(3)} | OI=${marketData.openInterestChange}% | BTC24h=${marketData.btcChange24h?.toFixed(3)}%`);
