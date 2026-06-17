@@ -41,15 +41,25 @@ LIVE MARKET DATA — 5 SIGNALS:
 CROSS-SIGNAL THESIS FRAMEWORK:
 - OI rising + TVL dropping + negative funding = extreme short squeeze setup → LONG BTC (high confidence)
 - Stablecoin depeg + TVL drop + DEX/CEX ratio spike = systemic DeFi stress → SHORT BTC/ETH
-- DEX/CEX ratio spike alone = rotation signal, requires confirmation from funding rate OR OI change
+- DEX/CEX ratio spike alone = rotation signal, requires confirmation from funding rate OR momentum
 - When funding rate is NEGATIVE (below -0.001%), shorts are dominant → LONG bias correct
 - When funding rate is POSITIVE (above +0.001%), longs are crowded → SHORT bias correct
-- When funding rate is between -0.001% and +0.001%, it is NOISE — ignore it, do not use as confirmation
-- BTC 24h momentum confirms direction: if btcChange24h is negative, do NOT open LONG. If positive, do NOT open SHORT.
-- High confidence trade (0.7+): DEX/CEX >2.0 AND funding confirms direction AND momentum confirms direction
-- Medium confidence trade (0.55-0.65): One strong signal (funding extreme OR DEX/CEX >2.5) AND momentum confirms
-- Do NOT trade when funding is in noise zone AND DEX/CEX is the only signal
-- When signals conflict or data is unavailable, do NOT trade. Precision over frequency.
+- When funding rate is between -0.001% and +0.001%, it is NOISE — ignore it entirely
+
+MOMENTUM RULES (these override funding bias when in conflict):
+- When btcChange24h is NEGATIVE (any value below 0): SHORT is always valid. LONG is blocked.
+- When btcChange24h is POSITIVE (any value above 0): LONG is always valid. SHORT is blocked.
+- When funding conflicts with momentum: IGNORE funding, follow momentum direction.
+- Example: funding negative (LONG bias) + momentum negative = open SHORT, not LONG, not no-trade.
+- Example: funding positive (SHORT bias) + momentum positive = open LONG, not SHORT, not no-trade.
+
+CONFIDENCE LEVELS:
+- High (0.70-0.85): momentum + funding AGREE on direction + DEX/CEX >2.0
+- Medium (0.55-0.65): momentum alone is clear + any one other signal confirms
+- Low (below 0.55): do not trade
+
+DO NOT park when signals conflict. Momentum is the tiebreaker. Always resolve to a direction.
+Only park when ALL signals are noise (funding in noise zone AND momentum near 0 AND DEX/CEX <1.5).
 
 Respond ONLY with valid JSON, no markdown, no preamble, no thinking tags:
 {

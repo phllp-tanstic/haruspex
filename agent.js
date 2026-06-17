@@ -107,7 +107,7 @@ async function runSignalCycle() {
     t.status === 'PAPER_TRADE_EXECUTED' && !t.closedAt
   ).length;
 
-  if (openCount >= 1) {
+  if (openCount >= 2) {
     console.log(`[HARUSPEX] Max positions reached (${openCount} open) — skipping LLM decision`);
     logNoAction(`Max positions reached (${openCount} open) — agent monitoring`);
     return;
