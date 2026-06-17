@@ -289,7 +289,7 @@ body { font-family: 'Inter', sans-serif; background-color: #050505; color: #E5E5
       <div class="w-1.5 h-1.5 bg-[#E0FF00]"></div>
       <h2 class="text-[10px] font-mono-geist uppercase tracking-widest text-gray-400">Performance_Metrics</h2>
     </div>
-    <div class="grid grid-cols-2 lg:grid-cols-5 gap-4" id="perf-stats">
+    <div class="grid grid-cols-2 lg:grid-cols-6 gap-4" id="perf-stats">
       <div class="p-4 bg-[#0F0F0F] border border-white/5 clip-chamfer">
         <div class="text-[10px] font-mono-geist uppercase tracking-widest text-gray-600 mb-1">Win Rate</div>
         <div id="stat-winrate" class="text-xl font-semibold text-[#E0FF00]">—</div>
@@ -310,6 +310,11 @@ body { font-family: 'Inter', sans-serif; background-color: #050505; color: #E5E5
         <div class="text-[10px] font-mono-geist uppercase tracking-widest text-gray-600 mb-1">Profit Factor</div>
         <div id="stat-profitfactor" class="text-xl font-semibold text-white">—</div>
       </div>
+      <div class="p-4 bg-[#0F0F0F] border border-[#E0FF00]/20 clip-chamfer">
+        <div class="text-[10px] font-mono-geist uppercase tracking-widest text-gray-600 mb-1">Balance</div>
+        <div id="stat-balance" class="text-xl font-semibold text-[#4ade80]">$10,000</div>
+      </div>
+      <div class="grid grid-cols-2 lg:grid-cols-6 gap-4" id="perf-stats"></div>
     </div>
   </section>
 
@@ -679,12 +684,63 @@ function renderLiveRisk(risk) {
 
 function renderStats(trades) {
   const executed = trades.filter(t => t.status === 'PAPER_TRADE_EXECUTED');
+  const closed = trades.filter(t => t.closedAt && t.pnlPercent !== undefined &&
+    !['MANUAL_CLOSE','manual-reset','MANUAL_CLOSE_FOR_LLM_RESET'].some(r => (t.closeReason||'').includes(r)));
+
+  // Top stats row
   document.getElementById('stat-trades').textContent = executed.length;
   document.getElementById('stat-signals').textContent = executed.length;
-
   if (executed.length > 0) {
-    const avgConf = executed.reduce((s, t) => s + (t.confidence || 0), 0) / executed.length;
-    document.getElementById('stat-confidence').textContent = `${Math.round(avgConf * 100)}%`;
+    const avgConf = executed.reduce((s,t) => s + (t.confidence||0), 0) / executed.length;
+    document.getElementById('stat-confidence').textContent = `${Math.round(avgConf*100)}%`;
+  }
+
+  if (closed.length === 0) return;
+
+  // PnL calculations
+  const pnls = closed.map(t => parseFloat(t.pnlPercent||0));
+  const wins = pnls.filter(p => p > 0);
+  const losses = pnls.filter(p => p <= 0);
+  const totalPnl = pnls.reduce((s,p) => s+p, 0);
+  const winRate = ((wins.length / pnls.length) * 100).toFixed(1);
+  const avgWin = wins.length > 0 ? wins.reduce((s,p)=>s+p,0)/wins.length : 0;
+  const avgLoss = losses.length > 0 ? Math.abs(losses.reduce((s,p)=>s+p,0)/losses.length) : 0;
+  const profitFactor = avgLoss > 0 ? (avgWin * wins.length / (avgLoss * losses.length)).toFixed(2) : '∞';
+
+  // Sharpe (simplified — mean/stddev of returns)
+  const mean = totalPnl / pnls.length;
+  const variance = pnls.reduce((s,p) => s + Math.pow(p-mean,2), 0) / pnls.length;
+  const stddev = Math.sqrt(variance);
+  const sharpe = stddev > 0 ? (mean / stddev).toFixed(2) : '—';
+
+  // Max drawdown
+  let peak = 10000, maxDD = 0, balance = 10000;
+  closed.forEach(t => {
+    balance += parseFloat(t.balanceChange||0) || (balance * parseFloat(t.pnlPercent||0) / 100);
+    if (balance > peak) peak = balance;
+    const dd = ((peak - balance) / peak) * 100;
+    if (dd > maxDD) maxDD = dd;
+  });
+
+  // Current balance
+  const lastWithBalance = [...closed].reverse().find(t => t.balanceAfter);
+  const currentBalance = lastWithBalance ? lastWithBalance.balanceAfter : 10000;
+
+  // Populate performance metrics
+  const pnlColor = totalPnl >= 0 ? 'text-[#4ade80]' : 'text-[#f87171]';
+  document.getElementById('stat-winrate').textContent = `${winRate}%`;
+  document.getElementById('stat-winrate').className = `text-xl font-semibold ${wins.length/pnls.length >= 0.5 ? 'text-[#E0FF00]' : 'text-[#f87171]'}`;
+  document.getElementById('stat-pnl').textContent = `${totalPnl >= 0 ? '+' : ''}${totalPnl.toFixed(2)}%`;
+  document.getElementById('stat-pnl').className = `text-xl font-semibold ${pnlColor}`;
+  document.getElementById('stat-sharpe').textContent = sharpe;
+  document.getElementById('stat-drawdown').textContent = `-${maxDD.toFixed(2)}%`;
+  document.getElementById('stat-profitfactor').textContent = profitFactor;
+
+  // Add balance card if it exists
+  const balanceEl = document.getElementById('stat-balance');
+  if (balanceEl) {
+    balanceEl.textContent = `$${currentBalance.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+    balanceEl.className = `text-xl font-semibold ${currentBalance >= 10000 ? 'text-[#4ade80]' : 'text-[#f87171]'}`;
   }
 }
 
