@@ -1,4 +1,5 @@
 require('dotenv').config();
+const fs = require('fs');
 const http = require('http');
 const https = require('https');
 const { checkCurveTVL } = require('./signals/curve-tvl');
@@ -12,6 +13,9 @@ const { logNoAction } = require('./logger');
 
 const CHECK_INTERVAL = 5 * 60 * 1000;
 const TEST_MODE = process.argv.includes('--test');
+const LOG_DIR = './logs';
+const MIN_CONFIDENCE = 0.70;
+const MAX_POSITIONS = 2;
 
 if (TEST_MODE) {
   console.log('='.repeat(50));
@@ -19,9 +23,9 @@ if (TEST_MODE) {
   console.log('='.repeat(50));
 } else {
   console.log('='.repeat(50));
-  console.log('  HARUSPEX — DeFi-to-CEX Signal Agent v2.0');
+  console.log('  HARUSPEX — DeFi-to-CEX Signal Agent v2.1');
   console.log('  Bitget Hackathon S1 — Track 1');
-  console.log('  5-Signal LLM Engine via Qwen3.6-plus');
+  console.log('  6-Signal LLM Engine via Qwen3.6-plus');
   console.log('  Checking every 5 minutes');
   console.log('='.repeat(50));
 }
@@ -38,9 +42,47 @@ function pushToServer(data) {
   req.end();
 }
 
-async function runSignalCycle() {
-  console.log(`\n[${new Date().toISOString()}] Running 5-signal cycle...`);
+function getRecentTrades() {
+  try {
+    let all = [];
+    fs.readdirSync(LOG_DIR)
+      .filter(f => f.startsWith('haruspex-') && f.endsWith('.json'))
+      .forEach(f => {
+        try { all = all.concat(JSON.parse(fs.readFileSync(`${LOG_DIR}/${f}`, 'utf8'))); }
+        catch {}
+      });
+    return all
+      .filter(t => t.closedAt && t.closeReason &&
+        !['MANUAL_CLOSE', 'manual-reset', 'MANUAL_CLOSE_FOR_LLM_RESET'].some(r => t.closeReason.includes(r)))
+      .sort((a, b) => new Date(b.closedAt) - new Date(a.closedAt))
+      .slice(0, 3)
+      .map(t => ({
+        side: t.side,
+        closeReason: t.closeReason,
+        pnlPercent: t.pnlPercent
+      }));
+  } catch { return []; }
+}
 
+function getOpenCount() {
+  try {
+    let all = [];
+    fs.readdirSync(LOG_DIR)
+      .filter(f => f.startsWith('haruspex-') && f.endsWith('.json'))
+      .forEach(f => {
+        try {
+          const raw = fs.readFileSync(`${LOG_DIR}/${f}`, 'utf8').trim();
+          if (raw.startsWith('[')) all = all.concat(JSON.parse(raw));
+        } catch {}
+      });
+    return all.filter(t => t.status === 'PAPER_TRADE_EXECUTED' && !t.closedAt).length;
+  } catch { return 0; }
+}
+
+async function runSignalCycle() {
+  console.log(`\n[${new Date().toISOString()}] Running 6-signal cycle...`);
+
+  // ── Collect all signals in parallel ──────────────────────
   const [curveData, stableData, fundingData, dexCexData, oiData] = await Promise.all([
     checkCurveTVL().catch(e => { console.error('[agent] curve-tvl failed:', e.message); return {}; }),
     checkStablecoinPeg().catch(e => { console.error('[agent] stablecoin-peg failed:', e.message); return {}; }),
@@ -49,7 +91,7 @@ async function runSignalCycle() {
     checkOpenInterest().catch(e => { console.error('[agent] open-interest failed:', e.message); return {}; })
   ]);
 
-  // Fetch BTC 24h price momentum from Bitget ticker
+  // ── BTC 24h momentum ──────────────────────────────────────
   let btcChange24h = 0;
   try {
     const tickerData = await new Promise((resolve, reject) => {
@@ -65,7 +107,11 @@ async function runSignalCycle() {
     console.error('[BTC Momentum] Failed:', e.message);
   }
 
+  // ── Recent trade context for Qwen ─────────────────────────
+  const recentTrades = getRecentTrades();
+  console.log(`[Context] Last 3 closed: ${recentTrades.map(t => `${t.side==='buy'?'LONG':'SHORT'}(${t.closeReason})`).join(', ') || 'none'}`);
 
+  // ── Push state to dashboard ───────────────────────────────
   pushToServer({
     fundingRate: fundingData.fundingRate ?? null,
     fundingReason: `BTC funding ${fundingData.fundingRate}% | TVL stable: ${fundingData.tvlStable}`,
@@ -76,6 +122,7 @@ async function runSignalCycle() {
     lastAgentPing: new Date().toISOString()
   });
 
+  // ── Build marketData for LLM ──────────────────────────────
   const marketData = {
     curveTVL: curveData.curveTVL ?? null,
     previousCurveTVL: curveData.previousCurveTVL ?? null,
@@ -90,30 +137,20 @@ async function runSignalCycle() {
     openInterest: oiData.openInterest ?? null,
     openInterestChange: oiData.openInterestChange ?? 0,
     btcChange24h: btcChange24h,
+    recentTrades: recentTrades
   };
 
   console.log(`[HARUSPEX] Signals: CurveTVL=${marketData.curveTVLChange}% | USDT=${marketData.usdtDeviation}% | Funding=${marketData.fundingRate}% | DEX/CEX=${marketData.dexCexRatio?.toFixed(3)} | OI=${marketData.openInterestChange}% | BTC24h=${marketData.btcChange24h?.toFixed(3)}%`);
 
-  const fs = require('fs');
-  const allTrades = fs.readdirSync('./logs')
-    .filter(f => f.startsWith('haruspex-') && f.endsWith('.json'))
-    .flatMap(f => {
-      try {
-        const raw = fs.readFileSync(`./logs/${f}`, 'utf8').trim();
-        return raw.startsWith('[') ? JSON.parse(raw) : [];
-      } catch { return []; }
-    });
-
-  const openCount = allTrades.filter(t =>
-    t.status === 'PAPER_TRADE_EXECUTED' && !t.closedAt
-  ).length;
-
-  if (openCount >= 2) {
+  // ── Max positions guard ───────────────────────────────────
+  const openCount = getOpenCount();
+  if (openCount >= MAX_POSITIONS) {
     console.log(`[HARUSPEX] Max positions reached (${openCount} open) — skipping LLM decision`);
     logNoAction(`Max positions reached (${openCount} open) — agent monitoring`);
     return;
   }
 
+  // ── LLM decision ─────────────────────────────────────────
   console.log(`[HARUSPEX] Consulting Qwen3.6-plus...`);
   const decision = await makeTradeDecision(marketData);
 
@@ -123,6 +160,14 @@ async function runSignalCycle() {
     return;
   }
 
+  // ── Confidence gate ───────────────────────────────────────
+  if (decision.confidence < MIN_CONFIDENCE) {
+    console.log(`[HARUSPEX] Confidence too low (${Math.round(decision.confidence*100)}%) — minimum ${MIN_CONFIDENCE*100}% required`);
+    logNoAction(`Low confidence: ${Math.round(decision.confidence*100)}% — skipped`);
+    return;
+  }
+
+  // ── Execute ───────────────────────────────────────────────
   console.log(`[HARUSPEX] LLM: TRADE — ${decision.action} ${decision.asset} (confidence: ${Math.round(decision.confidence * 100)}%)`);
   const signal = {
     fired: true,
@@ -133,8 +178,8 @@ async function runSignalCycle() {
     primaryAsset: decision.asset,
     value: fundingData.fundingRate,
     reason: decision.reasoning,
-    stopLoss: decision.stopLoss || 0.008,
-    takeProfit: decision.takeProfit || 0.016
+    stopLoss: decision.stopLoss || 0.012,
+    takeProfit: decision.takeProfit || 0.024
   };
 
   await executeSignal(signal);
