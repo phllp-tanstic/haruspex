@@ -357,7 +357,7 @@ async function loadLiveSignals() {
   // Signal 3 — DEX/CEX Volume Ratio (DefiLlama + Bitget)
   try {
     const [dexRes, cexRes] = await Promise.all([
-      fetch('https://api.llama.fi/overview/dexs/uniswap-v3?excludeTotalDataChartBreakdown=false&dataType=dailyVolume'),
+      fetch('https://api.llama.fi/overview/dexs/uniswap?excludeTotalDataChartBreakdown=true'),
       fetch('https://api.bitget.com/api/v2/spot/market/tickers?symbol=ETHUSDT')
     ]);
     const dexData = await dexRes.json();
