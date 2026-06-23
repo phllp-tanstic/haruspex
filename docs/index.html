@@ -657,7 +657,75 @@ function renderActivity(trades) {
 }
 
 async function loadData() {
-  await Promise.all([loadLiveSignals(), loadTradeData()]);
+  await Promise.all([loadLiveSignals(), loadTradeData(), loadLiveRisk()]);
+}
+
+async function loadLiveRisk() {
+  const JSONBIN_ID = '6a3b1a2fda38895dfef48f07';
+  const JSONBIN_KEY = '$2a$10$QQkc9ppxmNuMZd.6NKNNX.o1y6g7GosvFrR8E5O4lasEqTiBSjnmK';
+
+  try {
+    const r = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_ID}/latest`, {
+      headers: { 'X-Master-Key': JSONBIN_KEY }
+    });
+    const data = await r.json();
+    const risk = data.record;
+
+    if (!risk) return;
+
+    const countEl = document.getElementById('open-positions-count');
+    const container = document.getElementById('risk-positions');
+    const lastUpdate = risk.lastUpdate && risk.lastUpdate !== 'never'
+      ? `Live · ${new Date(risk.lastUpdate).toLocaleTimeString()}`
+      : 'Awaiting agent';
+
+    if (!risk.positions || risk.positions.length === 0) {
+      countEl.textContent = `0 open · ${lastUpdate}`;
+      container.innerHTML = `
+        <div class="flex items-center justify-center gap-3 py-8 border border-white/5 bg-[#0A0A0A]" style="clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);">
+          <span class="text-[11px] font-mono-geist text-gray-700 uppercase tracking-widest">No open positions · ${lastUpdate}</span>
+        </div>`;
+    } else {
+      countEl.textContent = `${risk.positions.length} open · ${lastUpdate}`;
+      container.innerHTML = risk.positions.map(p => {
+        const isLong = p.side === 'buy';
+        const sideColor = isLong ? 'text-[#4ade80]' : 'text-[#f87171]';
+        const pnl = parseFloat(p.pnl || 0);
+        const pnlColor = pnl >= 0 ? 'text-[#4ade80]' : 'text-[#f87171]';
+        return `
+          <div class="px-4 py-3 bg-[#0A0A0A] border border-white/5 text-xs font-mono-geist">
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-3">
+                <span class="text-[#E0FF00] uppercase tracking-widest font-semibold">${p.asset}</span>
+                <span class="${sideColor} font-semibold">${isLong ? 'LONG' : 'SHORT'}</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="${pnlColor} font-semibold">${pnl >= 0 ? '+' : ''}${pnl}%</span>
+                <span class="px-2 py-0.5 bg-blue-950/50 border border-blue-900/30 text-blue-400 text-[9px] uppercase tracking-widest">Live</span>
+              </div>
+            </div>
+            <div class="grid grid-cols-4 gap-3 text-[11px]">
+              <div><span class="text-gray-600">Entry </span><span class="text-gray-300">$${(p.entryPrice||0).toLocaleString()}</span></div>
+              <div><span class="text-gray-600">Now </span><span class="text-gray-300">$${(p.currentPrice||0).toLocaleString()}</span></div>
+              <div><span class="text-[#f87171]">SL </span><span class="text-gray-300">$${(p.stopLossPrice||0).toLocaleString()}</span></div>
+              <div><span class="text-[#4ade80]">TP </span><span class="text-gray-300">$${(p.takeProfitPrice||0).toLocaleString()}</span></div>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    // Update live balance from JSONBin
+    if (risk.balance) {
+      const balEl = document.getElementById('stat-balance');
+      if (balEl) {
+        balEl.textContent = `$${risk.balance.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+        balEl.className = `text-xl font-semibold ${risk.balance >= 10000 ? 'text-[#4ade80]' : 'text-[#f87171]'}`;
+      }
+    }
+
+  } catch (e) {
+    console.error('JSONBin fetch failed:', e.message);
+  }
 }
 
 loadData();
