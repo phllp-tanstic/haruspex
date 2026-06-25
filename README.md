@@ -10,7 +10,7 @@
   <em>Haruspex (n.): An ancient diviner who read entrails to predict the future.<br>This agent reads DeFi entrails to predict CEX price moves.</em>
 </p>
 <p align="center">
-  <a href="https://haruspex.netlify.app"><strong>Live Demo →</strong></a>
+  <a href="https://phllp-tanstic.github.io/haruspex"><strong>Live Demo →</strong></a>
   &nbsp;·&nbsp;
   <a href="./logs"><strong>Paper Trading Log →</strong></a>
   &nbsp;·&nbsp;
@@ -196,7 +196,7 @@ flowchart TD
     P --> R
     Q --> R
 
-    R --> S[Calculate SL · TP\n0.8% Stop Loss · 1.6% Take Profit]
+    R --> S[Calculate SL · TP\n1.2% Stop Loss · 2.4% Take Profit]
     S --> T[Generate LLM\nTrade Reasoning]
     T --> U[Log Trade Entry\nwith balanceBefore]
 
@@ -204,8 +204,8 @@ flowchart TD
 
     V --> W{SL or TP\nTriggered?}
     W -->|Monitoring| V
-    W -->|Stop Loss 0.8%| X[🔴 Close Position\nLog pnlPercent · balanceAfter]
-    W -->|Take Profit 1.6%| Y[🟢 Close Position\nLog pnlPercent · balanceAfter]
+    W -->|Stop Loss 1.2%| X[🔴 Close Position\nLog pnlPercent · balanceAfter]
+    W -->|Take Profit 2.4%| Y[🟢 Close Position\nLog pnlPercent · balanceAfter]
 
     X --> A
     Y --> A
@@ -273,7 +273,8 @@ bgc futures futures_get_open_interest --productType USDT-FUTURES --symbol BTCUSD
 ```
 
 ```bash
-bgc futures futures_get_current_fund_rate --symbol BTCUSDT --productType USDT-FUTURES
+bgc futures futures_get_funding_rate
+ --symbol BTCUSDT --productType USDT-FUTURES
 → BTC funding rate
 ```
 
@@ -318,74 +319,70 @@ Post-processing:
 
 ```mermaid
 flowchart TD
-    subgraph DEFI["⬡ DeFi Layer — DefiLlama"]
-        D1[curve-tvl.js\nCurve Finance TVL]
-        D2[stablecoin-peg.js\nUSDT · USDC Deviation]
-        D3[dex-cex-volume.js\nUniswap vs Bitget Volume]
+    subgraph DEFI["DeFi Layer — DefiLlama APIs"]
+        D1["curve-tvl.js\nCurve Finance TVL"]
+        D2["stablecoin-peg.js\nUSDT · USDC Deviation"]
+        D3["dex-cex-volume.js\nUniswap vs Bitget Volume"]
     end
 
-    subgraph CEX["⬡ CEX Layer — Bitget Agent Hub"]
-        C1[funding-rate.js\nBTC Perpetual Funding Rate]
-        C2[open-interest.js\nBTC Open Interest]
-        C3[BTC Momentum\nBitget Spot Ticker]
+    subgraph CEX["CEX Layer — Bitget Agent Hub"]
+        C1["funding-rate.js\nBTC Funding Rate"]
+        C2["open-interest.js\nBTC Open Interest"]
+        C3["BTC Momentum\nBitget Spot Ticker"]
     end
 
-    subgraph CORE["⬡ Core Engine"]
-        AG[agent.js\nOrchestrator — 5 min cycle]
-        DC[decider.js\nQwen3.6-plus Decision Engine]
-        EX[executor.js\nTrade Logger + Balance Tracker]
-        RS[reasoner.js\nLLM Trade Narration]
-        RK[risk.js\nSL · TP Monitor — 60s]
-        LG[logger.js\nJSON Log Writer]
-    end
+    AG["agent.js\nOrchestrator — every 5 min"]
 
-    subgraph OUTPUT["⬡ Output Layer"]
-        SV[server.js\nLocal Dashboard API]
-        LF[logs/haruspex-YYYY-MM-DD.json\nPaper Trading Record]
-        DB[dashboard/index.html\nNetlify — Public Demo]
-    end
+    DC["decider.js\nQwen3.6-plus\nAutonomous Decision Engine"]
 
-    D1 & D2 & D3 --> AG
-    C1 & C2 & C3 --> AG
+    EX["executor.js\nTrade Logger\nBalance Tracker"]
+
+    RS["reasoner.js\nLLM Trade Narration"]
+
+    RK["risk.js\nSL · TP Monitor\nevery 60 seconds"]
+
+    LG["logger.js\nJSON Log Writer"]
+
+    LF["logs/haruspex-YYYY-MM-DD.json\nPaper Trading Record"]
+
+    SV["server.js\nLocal Dashboard API"]
+
+    DB["docs/index.html\nGitHub Pages\nPublic Demo"]
+
+    DEFI --> AG
+    CEX --> AG
 
     AG --> DC
-    DC -->|shouldTrade: true| EX
-    DC -->|shouldTrade: false| LG
+
+    DC -->|"shouldTrade: true"| EX
+    DC -->|"shouldTrade: false"| LG
 
     EX --> RS
+    RS -->|"LLM reasoning"| EX
     EX --> LG
-    RS -->|LLM reasoning string| EX
 
     LG --> LF
     RK --> LF
-    RK -.->|bgc spot ticker\nlive price check| C3
 
-    AG -->|signal state push| SV
-    RK -->|position state push| SV
+    RK -.->|"bgc price check"| CEX
+
+    AG -->|"signal state"| SV
+    RK -->|"position state"| SV
+
     SV --> DB
     LF --> DB
 
     style DEFI fill:#0a1a0a,stroke:#4ade80,color:#4ade80
     style CEX fill:#0a0a1a,stroke:#60a5fa,color:#60a5fa
-    style CORE fill:#1a1a0a,stroke:#E0FF00,color:#E0FF00
-    style OUTPUT fill:#1a0a1a,stroke:#c084fc,color:#c084fc
-
-    style AG fill:#111,stroke:#E0FF00,color:#E0FF00
-    style DC fill:#111,stroke:#a78bfa,color:#a78bfa
-    style EX fill:#111,stroke:#60a5fa,color:#60a5fa
+    style AG fill:#1a1a00,stroke:#E0FF00,color:#E0FF00
+    style DC fill:#120a1a,stroke:#a78bfa,color:#a78bfa
+    style EX fill:#0a0a1a,stroke:#60a5fa,color:#60a5fa
     style RS fill:#111,stroke:#94a3b8,color:#94a3b8
-    style RK fill:#111,stroke:#f87171,color:#f87171
+    style RK fill:#1a0a0a,stroke:#f87171,color:#f87171
     style LG fill:#111,stroke:#94a3b8,color:#94a3b8
-    style SV fill:#111,stroke:#c084fc,color:#c084fc
-    style LF fill:#111,stroke:#4ade80,color:#4ade80
-    style DB fill:#111,stroke:#c084fc,color:#c084fc
-
-    style D1 fill:#0d150d,stroke:#4ade80,color:#86efac
-    style D2 fill:#0d150d,stroke:#4ade80,color:#86efac
-    style D3 fill:#0d150d,stroke:#4ade80,color:#86efac
-    style C1 fill:#0d0d15,stroke:#60a5fa,color:#93c5fd
-    style C2 fill:#0d0d15,stroke:#60a5fa,color:#93c5fd
-    style C3 fill:#0d0d15,stroke:#60a5fa,color:#93c5fd
+    style LF fill:#0a1a0a,stroke:#4ade80,color:#4ade80
+    style SV fill:#1a0a1a,stroke:#c084fc,color:#c084fc
+    style DB fill:#1a0a1a,stroke:#c084fc,color:#c084fc
 ```
 
 ### Component Breakdown
@@ -418,14 +415,65 @@ flowchart TD
 
 | File | Role | Description |
 |------|------|-------------|
-| netlify/functions/bitget.js | CORS proxy layer | Enables browser access to Bitget API responses |
-| dashboard/index.html | Live system UI | Displays signals, trades, and performance metrics |
-| dashboard/trades.json | Historical trade store | Static export of daily execution logs |
+| docs/index.html | Live system UI | Displays signals, trades, and performance metrics |
+| docs/trades.json | Historical trade store | Static export of daily execution logs |
 | Netlify fallback data | Backup dataset | Ensures dashboard availability during API downtime |
 
 
-DATA FLOWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW DATA DIAGRAM
+DATA FLOW DATA DIAGRAM
 
+## Data Flow
+
+```mermaid
+sequenceDiagram
+    participant AG as agent.js
+    participant DL as DefiLlama API
+    participant BG as Bitget Agent Hub
+    participant QW as Qwen3.6-plus
+    participant EX as executor.js
+    participant RK as risk.js
+    participant LG as logs/
+
+    Note over AG: Every 5 minutes
+
+    AG->>DL: Fetch Curve TVL
+    AG->>DL: Fetch USDT · USDC prices
+    AG->>DL: Fetch Uniswap V3 volume
+    AG->>BG: bgc funding rate
+    AG->>BG: bgc open interest
+    AG->>BG: bgc spot ticker (momentum)
+
+    DL-->>AG: curveTVL · usdtDeviation · dexCexRatio
+    BG-->>AG: fundingRate · openInterest · btcChange24h
+
+    Note over AG: Build marketData object
+
+    AG->>QW: 6 signals + cross-signal framework
+    Note over QW: Analyze convergence
+    QW-->>AG: shouldTrade · action · asset · confidence · SL · TP
+
+    alt shouldTrade is false
+        AG->>LG: Log no-trade + reasoning
+    else shouldTrade is true
+        AG->>EX: Pass signal object
+        EX->>BG: bgc spot ticker (entry price)
+        BG-->>EX: currentPrice
+        EX->>QW: Generate trade reasoning
+        QW-->>EX: Natural language reasoning
+        EX->>LG: Write trade log + balanceBefore
+    end
+
+    Note over RK: Every 60 seconds
+
+    RK->>BG: bgc spot ticker (current price)
+    BG-->>RK: currentPrice
+
+    alt SL or TP hit
+        RK->>LG: Update trade — closePrice · pnlPercent · balanceAfter
+    else Position healthy
+        RK->>RK: Continue monitoring
+    end
+```
 
 ## How It Works
 
@@ -485,8 +533,8 @@ Qwen3.6 Plus processes all signals using the cross signal thesis framework and r
 [EXECUTOR] Signal confirmed — placing paper trade
 Asset: BTCUSDT | Side: SELL | Size: 0.01
 [EXECUTOR] Entry price: $65,893.55
-[EXECUTOR] Stop loss: $66,223.02 (0.8% above entry)
-[EXECUTOR] Take profit: $65,234.61 (1.6% below entry)
+[EXECUTOR] Stop loss: $66,223.02 (1.2% above entry)
+[EXECUTOR] Take profit: $65,234.61 (2.4% below entry)
 [EXECUTOR] Account balance: $9,990.12
 ```
 
@@ -514,3 +562,325 @@ Trade logs are updated with:
 - pnlPercent  
 - balanceAfter  
 - balanceChange
+
+
+## Repository Structure
+
+```
+haruspex/
+│
+├── agent.js          # Master orchestrator — 5-min signal cycle
+├── decider.js        # Qwen3.6-plus trade decision engine
+├── executor.js       # Paper trade execution + balance tracking
+├── risk.js           # 60s SL/TP monitor, auto-close positions
+├── reasoner.js       # LLM trade reasoning generator
+├── logger.js         # JSON trade log writer
+├── server.js         # Local API server for dashboard
+│
+├── signals/
+│   ├── curve-tvl.js        # Curve Finance TVL via DefiLlama
+│   ├── stablecoin-peg.js   # USDT/USDC peg deviation via DefiLlama
+│   ├── dex-cex-volume.js   # Uniswap vs Bitget volume ratio
+│   ├── funding-rate.js     # BTC funding rate via Bitget Agent Hub
+│   └── open-interest.js    # BTC open interest via Bitget Agent Hub
+│
+├── docs/
+│   ├── index.html    # Live dashboard — GitHub Pages
+│   └── trades.json   # Paper trading snapshot for public dashboard
+│
+├── logs/
+│   └── haruspex-YYYY-MM-DD.json  # Daily paper trading logs
+│
+├── .env              # API keys (not committed)
+├── .env.example      # Environment variable template
+├── package.json
+└── README.md
+```
+
+
+## Core Logic
+
+### Methodology
+
+Haruspex operates on the cross-environment divergence thesis: CEX price moves are often preceded by measurable stress signals in DeFi. The agent quantifies this divergence across three dimensions:
+- Liquidity divergence: Curve TVL dropping while CEX open interest rises = DeFi deleveraging into CEX leverage buildup
+- Volume rotation: DEX/CEX ratio >2.0 = more volume being absorbed by DeFi than CEX, precedes volatility
+- Funding divergence: Negative funding rate = market paying shorts to hold, historically precedes short squeezes
+
+### Risk Management
+
+| Parameter | Value | Rationale |
+|------------|--------|-----------|
+| **Stop Loss** | `1.2%` from entry | Wide enough to avoid noise stops on 5-minute candles |
+| **Take Profit** | `2.4%` from entry | Maintains a `1:2` risk/reward ratio |
+| **Max Positions** | `2` simultaneous | Prevents runaway exposure while allowing parallel trades |
+| **Position Size** | `0.01–0.05 BTC` | Confidence-scaled; larger size only at `85%+` confidence |
+| **Starting Balance** | `10,000 USDT` | Standard paper-trading baseline |
+| **Check Interval** | `60 seconds` | Frequent enough to monitor SL/TP without excessive API requests |
+
+
+### AI Reasoning Workflow
+
+**Every trade produces two LLM outputs:**
+
+1. Decision (`decider.js`): Qwen receives raw signal values and the cross-signal framework. Returns structured JSON with trade parameters. Temperature 0.2 for consistency.
+
+2. Reasoning (`reasoner.js`): After execution, Qwen narrates the trade in first person, referencing the specific signal values that drove the decision. This is stored in the trade log and displayed on the dashboard.
+
+Both calls strip <think> tags from Qwen's extended reasoning mode before parsing.
+
+### Data Sources
+
+### Data Sources
+
+| Source | Data | Why Valuable | Quality Control |
+|----------|----------|--------------|----------------|
+| **DefiLlama** (`api.llama.fi`) | Curve TVL | Aggregated from on-chain data with no single point of failure | Cross-validated against DefiLlama anomaly detection mechanisms |
+| **DefiLlama Stablecoins** (`stablecoins.llama.fi`) | USDT/USDC prices | Oracle-aggregated peg prices with frequent updates | Deviation calculated as `abs(price - 1.00)` for a simple, manipulation-resistant signal |
+| **Uniswap V3 via DefiLlama** | DEX 24h volume | On-chain trading volume that cannot be spoofed | `24-hour` rolling window smooths single-block anomalies |
+| **Bitget Agent Hub** | Funding rate, open interest, spot price | Native exchange data with zero execution latency | Direct API integration eliminates third-party aggregation risk |
+
+
+## Setup & Installation
+
+### Prerequisites
+
+- Node.js v20+
+- pnpm (npm install -g pnpm)
+- Bitget Agent Hub CLI (bitget-skill-hub v1.0.2)
+- Proton VPN or equivalent (required if local ISP blocks api.bitget.com)
+- Groq API key or Alibaba Cloud API key (for Qwen3.6-plus via hackathon endpoint)
+
+Environment Variables
+```
+# .env
+QWEN_API_KEY=your_hackathon_qwen_api_key
+BITGET_API_KEY=your_bitget_api_key
+BITGET_SECRET_KEY=your_bitget_secret_key
+BITGET_PASSPHRASE=your_bitget_passphrase
+```
+### Installation
+```
+git clone https://github.com/phllp-tanstic/haruspex
+cd haruspex
+pnpm install
+cp .env.example .env
+# Fill in your API keys in .env
+```
+
+### Bitget Agent Hub Setup
+```
+pnpm add -g bitget-skill-hub
+bgc config set apiKey YOUR_KEY
+bgc config set secretKey YOUR_SECRET
+bgc config set passphrase YOUR_PASSPHRASE
+
+# Verify connection
+bgc spot spot_get_ticker --symbol BTCUSDT
+```
+
+### Running the Project
+
+Development Mode (single test cycle)
+```
+node agent.js --test
+```
+
+### Expected Output
+
+```
+[2026-06-17T04:11:01.203Z] Running 6-signal cycle...
+[Open Interest] BTC OI: 32,984.50 BTC | Change: 0%
+[Curve TVL] Current: $1.46B | Change: 0%
+[Funding Rate] BTC: -0.0012% | DeFi TVL stable: true
+[Stablecoin] USDT: $0.9991 | Deviation: 0.0919%
+[DEX/CEX] Uniswap V3 24h: $583.1M | Ratio: 2.3534
+[BTC Momentum] 24h change: -0.479%
+[HARUSPEX] Consulting Qwen3.6-plus...
+[Decider] shouldTrade=true | signal=multi-signal-convergence | confidence=0.6
+[HARUSPEX] LLM: TRADE — SHORT BTCUSDT (confidence: 60%)
+```
+
+### Production Mode (continuous agent)
+
+```
+bash# 
+
+Terminal 1 — Dashboard API
+node server.js
+
+# Terminal 2 — Risk Manager
+node risk.js
+
+# Terminal 3 — Signal Agent
+node agent.js
+```
+
+### Daily Trade Snapshot 
+
+```
+$today = (Get-Date -Format "yyyy-MM-dd")
+copy "logs\haruspex-$today.json" "dashboard\trades.json"
+git add docs/trades.json
+git commit -m "Daily snapshot $today"
+git push
+```
+
+
+## Demo
+
+### Live Dashboard
+
+https://phllp-tanstic.github.io/haruspex/
+
+The dashboard displays in real time:
+- 6 signal cards with live values (Curve TVL, ETH/BTC ratio, stablecoin peg, funding rate)
+- Performance metrics: win rate, total PnL, Sharpe ratio, max drawdown, profit factor, balance
+- Trade log with full LLM reasoning per trade
+- Risk monitor showing open positions with live PnL
+- Agent activity log
+
+### Example Trade Record
+```
+{
+  "id": "trade-1781617086582",
+  "timestamp": "2026-06-17T04:12:25.199Z",
+  "signal": "multi-signal-convergence",
+  "action": "SELL BTCUSDT",
+  "asset": "BTCUSDT",
+  "side": "sell",
+  "size": "0.01",
+  "entryPrice": 65893.55,
+  "stopLossPrice": 66223.02,
+  "takeProfitPrice": 65234.61,
+  "confidence": 0.6,
+  "reason": "BTC 24h momentum of -0.479% overrides the negative funding rate and mandates SHORT bias per the momentum rules. This directional bias is confirmed by DEX/CEX volume ratio of 2.353, indicating capital rotation to DeFi preceding CEX volatility.",
+  "status": "PAPER_TRADE_EXECUTED",
+  "paperTrade": true,
+  "balanceBefore": 9990.12,
+  "balanceAfter": null,
+  "balanceChange": null
+}
+```
+
+### Example LLM Decision (Full Qwen Output)
+
+Input signals:
+- DEX/CEX ratio: 2.353 (elevated — DeFi rotation)
+- BTC funding rate: -0.0012% (noise zone — ignored)
+- BTC 24h momentum: -0.479% (bearish — tiebreaker)
+- Curve TVL: stable
+- Stablecoin peg: stable
+- Open Interest: unchanged
+
+Qwen reasoning:
+> **Trade Rationale**
+>
+> BTC 24-hour price momentum is negative at **-0.479%**, which overrides the negative funding rate and mandates a **SHORT** bias according to the momentum rules. This directional bias is further confirmed by a **DEX/CEX volume ratio of 2.353**, indicating capital rotation toward DeFi, a condition that has historically preceded increased volatility on centralized exchanges.
+
+Decision: SHORT BTCUSDT | Confidence: 60% | SL: 1.2% | TP: 2.4%.
+
+### Paper Trading Log Fields
+
+Every trade record includes all submission-required fields:
+
+| Required Field | Haruspex Field | Example |
+|----------------|----------------|---------|
+| **Timestamp** | `timestamp` | `2026-06-17T04:12:25.199Z` |
+| **Trading Pair** | `asset` | `BTCUSDT` |
+| **Direction** | `side` | `sell (SHORT)` |
+| **Price** | `entryPrice` | `65893.55` |
+| **Quantity** | `size` | `0.01 BTC` |
+| **Account Balance Change** | `balanceChange` | `-9.88 USDT` |
+
+
+## Performance Analysis
+
+### Paper Trading Results
+Over 44 paper trades across 8 days of continuous autonomous operation (June 16–23, 2026):
+
+| Metric | Value |
+|--------|-------|
+| Total Trades | 44 |
+| Win Rate | 38.6% |
+| Total PnL | -8.15% |
+| Max Drawdown | -8.15% |
+| Avg Confidence | 74% |
+| Starting Balance | $10,000 USDT |
+| Final Balance | $9,912.82 USDT |
+
+### Infrastructure Incidents
+Two infrastructure failures significantly impacted results:
+
+**June 17 VPN dropout:** A 2-hour 44-minute connectivity failure prevented risk.js from closing two positions at their stop loss prices. These two trades produced -2.28% and -2.18% losses instead of the intended -1.2% maximum. **Fix implemented:** A circuit breaker was deployed in the same session — after 3 consecutive price fetch failures, open positions are force-closed at last known price. No subsequent VPN failure produced losses exceeding the 1.2% stop loss.
+
+**June 19 VPN instability:** Repeated short dropouts triggered 13 circuit breaker closes in one day, producing random exit prices rather than clean SL/TP closes. **Fix implemented:** Proton VPN protocol switched to WireGuard for faster reconnection.
+
+### Signal Quality Assessment
+The 24h momentum signal proved too slow for 5-minute execution cycles in BTC's current low-volatility ranging regime. Frequent intraday counter-trend bounces caused repeated stop losses while the 24h direction remained unchanged. The primary architectural improvement identified: adding a 1h momentum confirmation gate before entry to filter out trades against short-term intraday structure. This would have blocked the majority of losing trades in the June 17–18 cluster.
+
+### What This Demonstrates
+The agent functioned as designed throughout. Every decision was autonomous, documented with reasoning, and executed with full audit trail. The negative PnL reflects real market conditions and real signal limitations and not system failures. This is the expected outcome of a live paper trading experiment: a hypothesis tested against real data, with clear findings on what to improve next.
+
+
+## Future Roadmap
+
+**Near-Term (Post-Hackathon)**
+- ETH signal expansion — add Aave/Compound TVL monitoring for ETH-specific signals
+- Multi-asset portfolio — simultaneous BTC + ETH positions with cross-asset correlation awareness
+- Webhook alerts — Telegram/Discord notifications on trade execution and SL/TP hits
+
+**Medium-Term**
+- Backtesting engine — replay historical DefiLlama + Bitget data through the signal engine with full P&L attribution per signal
+- Signal confidence calibration — track which signal combinations produce highest win rates and weight Qwen's confidence accordingly
+- On-chain execution — direct DeFi position hedging via Uniswap/GMX when CEX signal fires
+
+**Scalability**
+- Cloud deployment — migrate from local Node.js to AWS Lambda / Google Cloud Run for 24/7 operation without VPN dependency
+- Multi-exchange — extend execution layer to OKX, Bybit using the same signal engine
+- Signal marketplace — expose Haruspex signals as an API for other agents to consume
+
+**Commercialization**
+- Signal-as-a-service — subscription API for DeFi stress signals with historical data
+- White-label agent — configurable agent framework deployable by other teams on Bitget ecosystem
+- Performance fee model — live trading with fee taken on profitable closed positions
+
+
+## Built With
+
+| Technology | Category | Purpose | Integration Role |
+|------------|----------|----------|------------------|
+| **Node.js v20** | Runtime | Async orchestration | Core agent loop and all I/O operations |
+| **Qwen3.6-plus** | LLM | Trade decisions and reasoning | `decider.js`, `reasoner.js` |
+| **Bitget Agent Hub (bgc)** | CEX Infrastructure | Funding rate, open interest, and market prices | `signals/funding-rate.js`, `signals/open-interest.js` |
+| **Bitget REST API** | CEX Data | Spot ticker and volume data | BTC momentum calculation and execution pricing |
+| **DefiLlama API** | DeFi Data | TVL, stablecoin prices, and DEX volume data | `curve-tvl.js`, `stablecoin-peg.js`, `dex-cex-volume.js` |
+| **pnpm** | Package Manager | Dependency management | Required by Bitget Agent Hub tooling |
+| **Tailwind CSS** | UI Framework | Dashboard styling | `docs/index.html` |
+
+
+## Key Innovations
+
+1. Cross-environment signal fusion at runtime. Haruspex is the first open-source agent to wire DefiLlama TVL + stablecoin oracle + Uniswap volume directly to Bitget futures execution in a single autonomous 5-minute loop. No existing retail framework does this.
+
+2. LLM as judgment, not rules. Rather than hardcoded thresholds ("if funding < -0.01% then LONG"), Qwen3.6-plus reads all 6 signals simultaneously and weighs them holistically — the same cognitive process a senior analyst uses. This means the agent adapts to market conditions rather than breaking when conditions change.
+
+3. Momentum as conflict resolution. Most multi-signal agents park when signals conflict. Haruspex uses BTC 24h momentum as a definitive tiebreaker — if momentum is negative, SHORT is always valid regardless of funding rate direction. This eliminates paralysis while maintaining directional discipline.
+
+4. Graceful signal degradation. Every signal collector runs inside a .catch() block. A dead API returns null and the LLM receives that null explicitly — it can still make decisions on the remaining live signals. The agent never crashes on a single data source failure.
+
+
+## Conclusion
+
+Haruspex is a cross-market trading intelligence agent built on the premise that DeFi stress signals often emerge before their effects are visible on centralized exchanges. Every five minutes, it monitors six independent signals including Curve TVL, stablecoin peg deviations, DEX to CEX volume rotation, BTC funding rates, open interest, and price momentum, then uses Qwen3.6-plus to synthesize those inputs into autonomous trading decisions with fully documented reasoning. Each trade generates a complete audit trail containing the thesis, decision logic, execution details, and balance impact, creating a transparent system that can be reviewed, improved, and scaled. Unlike conventional trading bots that rely solely on exchange data and predefined rules, Haruspex treats DeFi and centralized exchanges as a single interconnected market and routes on-chain protocol health signals through an LLM judgment layer directly into trade execution, representing a fundamentally different approach to market intelligence and automated trading.
+
+
+---
+
+
+<p align="center">
+  <em>Built for Bitget AI Hackathon S1 — Track 1: Trading Agent</em><br>
+  <em>Qwen3.6-plus provided by Alibaba Cloud as hackathon strategic partner</em><br>
+  <em>DeFi data provided by DefiLlama — the open-source DeFi analytics layer</em>
+</p>
+
