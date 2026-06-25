@@ -9,7 +9,7 @@ process.on('uncaughtException', (err) => {
   }
 });
 const LOG_DIR = path.join(__dirname, 'logs');
-const DASHBOARD_DIR = path.join(__dirname, 'dashboard');
+const DASHBOARD_DIR = path.join(__dirname, 'docs');
 let agentState = { ethBtcRatio: null, fundingRate: null, lastAgentPing: null };
 let riskState = { positions: [], lastRiskPing: null, warning: false };
 const server = http.createServer((req, res) => {
@@ -72,18 +72,6 @@ const server = http.createServer((req, res) => {
   if (req.url === '/api/state') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(agentState));
-    return;
-  }
-  if (req.url === '/api/stats') {
-    try {
-      const { calculateStats } = require('./stats');
-      const stats = calculateStats();
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(stats));
-    } catch (err) {
-      res.writeHead(500);
-      res.end(JSON.stringify({ error: err.message }));
-    }
     return;
   }
   

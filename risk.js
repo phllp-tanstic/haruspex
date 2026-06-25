@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 const http = require('http');
+const https = require('https');
 
 // ── Constants ──────────────────────────────────────────────
 const LOG_DIR = path.join(__dirname, 'logs');
@@ -17,22 +18,53 @@ let lastKnownPrices = {};
 
 // ── Dashboard Push ─────────────────────────────────────────
 function postRiskState(positions, warning) {
-  const body = JSON.stringify({
-    positions,
-    warning,
-    lastRiskPing: new Date().toISOString()
-  });
-  const req = http.request({
-    hostname: 'localhost', port: 3000,
-    path: '/api/risk', method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Content-Length': Buffer.byteLength(body)
-    }
-  });
-  req.on('error', () => {});
-  req.write(body);
-  req.end();
+  // Push to local dashboard server
+  try {
+    const body = JSON.stringify({ positions, warning, lastRiskPing: new Date().toISOString() });
+    const req = http.request({
+      hostname: 'localhost', port: 3000,
+      path: '/api/risk', method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+    });
+    req.on('error', () => {});
+    req.write(body);
+    req.end();
+  } catch {}
+
+  // Push to JSONBin for public dashboard
+  try {
+    const payload = JSON.stringify({
+      positions,
+      warning,
+      balance: getLatestBalance(),
+      lastUpdate: new Date().toISOString()
+    });
+    const req = https.request({
+      hostname: 'api.jsonbin.io',
+      path: `/v3/b/${process.env.JSONBIN_ID}`,
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Master-Key': process.env.JSONBIN_KEY,
+        'Content-Length': Buffer.byteLength(payload)
+      }
+    }, (res) => {
+      let d = '';
+      res.on('data', chunk => d += chunk);
+      res.on('end', () => {
+        if (res.statusCode !== 200) {
+          console.error('[Risk] JSONBin push failed:', res.statusCode, d.substring(0, 100));
+        } else {
+          console.log('[Risk] JSONBin updated — balance: $' + getLatestBalance());
+        }
+      });
+    });
+    req.on('error', e => console.error('[Risk] JSONBin error:', e.message));
+    req.write(payload);
+    req.end();
+  } catch (e) {
+    console.error('[Risk] JSONBin push error:', e.message);
+  }
 }
 
 // ── Price Fetcher ──────────────────────────────────────────
